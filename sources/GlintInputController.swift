@@ -57,7 +57,8 @@ final class GlintInputController: IMKInputController {
     return client.bundleIdentifier()
   }
 
-  /// 诊断输出走 stderr，由 `scripts/run-dev.sh` 收进日志文件。
+  /// 诊断输出走 stderr。输入法平时由 launchd 拉起，输出没有去处，
+  /// 开发时用 `scripts/run-dev.sh` 前台运行并收进日志文件。
   ///
   /// 记录默认只含事件类别，**不含实际输入正文**（`docs/implementation-plan.md` §7）。
   private func log(_ message: String) {

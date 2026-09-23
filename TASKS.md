@@ -66,6 +66,9 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 - 只构建 arm64，产物经 `lipo` 确认非通用二进制（D-14）。
 - 用免费 Apple Development 证书签名，`codesign --verify --strict` 通过（D-15）。
 - 输入源注册 / 启用 / 停用 / 切换的命令行入口已实现（尚未执行）。
+- **输入源图标已有 M0 占位版**：`resources/glint.pdf`，四角星（闪光，对应 Glint
+  「一闪而过的光」），由 `scripts/make-icons.py` 手写 PDF 生成，不引入图形库。
+  正式图标仍是 M1 前交付项，app 图标（Asset Catalog）未做。
 - librime 1.17.0 依赖已按固定版本取回并校验和核对（`make deps`），含 lua / octagram / predict 三个插件。
 - **来源与许可已登记**：`THIRD_PARTY.md` 记录各组件、固定提交号与许可证，正文在 `licenses/`，
   并随包附带到 `Contents/Resources/`。把 dylib 打进产物就产生了保留声明的义务，
@@ -111,6 +114,8 @@ THIRD_PARTY.md            组件、提交号与许可证登记
 scripts/check-ids.sh      构建前核对 Info.plist 与 GlintIds.swift 的标识一致
 scripts/fetch-librime.sh  按固定版本 + 校验和取 librime
 scripts/setup-testdata.sh 建立隔离测试数据，拒绝写入 ~/Library/Rime
+scripts/make-icons.py     生成输入源图标 PDF（M0 占位版）
+scripts/run-dev.sh        前台运行并收集诊断输出，供 T0.3 观察会话事件
 ```
 
 **关于 Xcode**：本机 `xcode-select` 指向 CommandLineTools，但 `Makefile` 通过 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 直接使用已安装的 Xcode 27.0，**无需 sudo 切换**。
