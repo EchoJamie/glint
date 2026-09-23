@@ -221,6 +221,11 @@ Rime 的双拼方案可通过编码映射对接拼音词典，因此输入编码
 | Sparkle | 主体 MIT，包含其他第三方许可 | 按实际需要选择，保留随附声明。 |
 | plum | LGPLv3 | 按实际复制、修改或集成方式处理，尚未决定引入。 |
 
+**实际复用的登记**：具体的复用文件、来源提交号与修改内容记在仓库根目录的
+[THIRD_PARTY.md](../THIRD_PARTY.md)，不在此处重复维护，避免两处不一致。
+2026-09-24 首次复用：`sources/MacOSKeyCodes.swift` 取自鼠须管
+`sources/MacOSKeyCodes.swift` @ `0cd71a61`。
+
 许可边界：
 
 - 独立仓库、换项目名称或不使用 GitHub Fork，都不会消除被复用代码原有的许可证义务。

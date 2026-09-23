@@ -8,6 +8,7 @@
 //  version 3 or later. See LICENSE in the project root.
 //
 
+import Carbon
 import Foundation
 
 /// T0.2 的离线用例：候选身份与提交次数。
@@ -19,11 +20,18 @@ import Foundation
 /// 词全不全属于 Rime 的事，用例不做价值判断。
 enum SelfTest {
   static func run(testDataDir: String, verbose: Bool) -> Int32 {
-    let userDir = (testDataDir as NSString).appendingPathComponent("rime")
-    let logDir = (testDataDir as NSString).appendingPathComponent("log")
+    // 两种传法：给父目录则用其下的 rime/（`make testdata` 的布局），
+    // 或者直接给一个 Rime 数据目录（例如 ~/Library/Glint）。
+    // 后者让用例可以就地验证输入法真正会用的那个目录。
+    let base = testDataDir
+    let nested = (base as NSString).appendingPathComponent("rime")
+    let userDir = FileManager.default.fileExists(
+      atPath: (nested as NSString).appendingPathComponent("default.yaml")) ? nested : base
+    let logDir = (userDir as NSString).appendingPathComponent("logs")
 
-    guard FileManager.default.fileExists(atPath: userDir) else {
-      print("❌ 找不到测试数据目录：\(userDir)")
+    guard FileManager.default.fileExists(
+      atPath: (userDir as NSString).appendingPathComponent("default.yaml")) else {
+      print("❌ 目录里找不到 default.yaml，不像 Rime 数据目录：\(userDir)")
       print("   先执行：make testdata")
       return 2
     }
@@ -52,8 +60,15 @@ enum SelfTest {
       print("\(mark) \(name)\(detail.isEmpty ? "" : "  — \(detail)")")
     }
 
+    // ---------------------------------------------------------------- T0
+    // 先验映射：后面的用例都依赖它，它错了后面的现象会很难解释。
+    print("── T0 键码映射（macOS → librime）──")
+    for (label, passed, detail) in checkKeyCodeMapping() {
+      record(label, passed, detail)
+    }
+
     // ---------------------------------------------------------------- T1
-    print("── T1 引擎与会话 ──")
+    print("\n── T1 引擎与会话 ──")
     let deployed = engine.deploy()
     record("部署完成", deployed, deployed ? "" : "start_maintenance 失败，见日志目录")
 
@@ -229,14 +244,57 @@ enum SelfTest {
 
   // MARK: - 辅助
 
-  /// 逐字母送入引擎，返回被引擎接收的按键数。
+  /// 小写字母 → macOS 虚拟键码。用 Carbon 常量，不手抄数字。
+  private static let macKeyCodes: [Character: UInt16] = [
+    "a": UInt16(kVK_ANSI_A), "b": UInt16(kVK_ANSI_B), "c": UInt16(kVK_ANSI_C),
+    "d": UInt16(kVK_ANSI_D), "e": UInt16(kVK_ANSI_E), "f": UInt16(kVK_ANSI_F),
+    "g": UInt16(kVK_ANSI_G), "h": UInt16(kVK_ANSI_H), "i": UInt16(kVK_ANSI_I),
+    "j": UInt16(kVK_ANSI_J), "k": UInt16(kVK_ANSI_K), "l": UInt16(kVK_ANSI_L),
+    "m": UInt16(kVK_ANSI_M), "n": UInt16(kVK_ANSI_N), "o": UInt16(kVK_ANSI_O),
+    "p": UInt16(kVK_ANSI_P), "q": UInt16(kVK_ANSI_Q), "r": UInt16(kVK_ANSI_R),
+    "s": UInt16(kVK_ANSI_S), "t": UInt16(kVK_ANSI_T), "u": UInt16(kVK_ANSI_U),
+    "v": UInt16(kVK_ANSI_V), "w": UInt16(kVK_ANSI_W), "x": UInt16(kVK_ANSI_X),
+    "y": UInt16(kVK_ANSI_Y), "z": UInt16(kVK_ANSI_Z),
+  ]
+
+  /// 逐字母送入引擎。
+  ///
+  /// 走的是**真实路径**：macOS 虚拟键码 → `MacOSKeyCode` 映射 → 引擎。
+  /// 因此这条链路（含映射表本身）也在用例覆盖之内。
   private static func type(_ text: String, into engine: RimeEngine) -> Int {
     var handled = 0
     for character in text {
-      guard let code = RimeKey.letter(character) else { continue }
-      if engine.processKey(Int(code)) { handled += 1 }
+      guard let keycode = macKeyCodes[character] else { continue }
+      let rime = MacOSKeyCode.rimeKeyCode(keycode: keycode, keychar: character,
+                                          shift: false, caps: false)
+      if engine.processKey(Int(rime)) { handled += 1 }
     }
     return handled
+  }
+
+  /// 键码映射的定点检查。
+  ///
+  /// 这些值错了不会崩，只会让打字行为莫名其妙，所以单独验一遍。
+  private static func checkKeyCodeMapping() -> [(String, Bool, String)] {
+    let cases: [(String, UInt16, Character?, UInt32)] = [
+      // macOS 虚拟键码 → 期望的 librime 键码
+      ("字母 n（macOS 45）", UInt16(kVK_ANSI_N), "n", 110),
+      ("字母 a（macOS 0）", UInt16(kVK_ANSI_A), "a", 97),
+      ("空格", UInt16(kVK_Space), " ", 0x20),
+      ("回车", UInt16(kVK_Return), "\r", 0xff0d),
+      ("Escape", UInt16(kVK_Escape), nil, 0xff1b),
+      ("删除", UInt16(kVK_Delete), nil, 0xff08),
+      ("下方向键", UInt16(kVK_DownArrow), nil, 0xff54),
+      ("上方向键", UInt16(kVK_UpArrow), nil, 0xff52),
+      ("数字 1", UInt16(kVK_ANSI_1), "1", 0x31),
+    ]
+    return cases.map { label, keycode, char, expected in
+      let actual = MacOSKeyCode.rimeKeyCode(keycode: keycode, keychar: char,
+                                            shift: false, caps: false)
+      return (label, actual == expected,
+              actual == expected ? "→ 0x\(String(actual, radix: 16))"
+                                 : "期望 0x\(String(expected, radix: 16))，实际 0x\(String(actual, radix: 16))")
+    }
   }
 
   /// 从全局索引 0 起按批读到底，直到末尾或达到上限。

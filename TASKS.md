@@ -28,12 +28,23 @@
 "**without a logout, the App might not work properly**"，我们遇到的是同一件事。
 系统在登录时才扫描输入法目录并建立输入源列表。
 
-**重新登录后要做的事**：执行下面的检查，确认输入源已被系统接住，再继续 T0.3。
+**重新登录后要做的事**
 
 ```sh
-"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --list-input-sources glint
-"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --enable-input-source
+G="$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint"
+"$G" --list-input-sources glint     # 应列出 com.github.echojamie.glint.Hans
+"$G" --enable-input-source          # 启用
 ```
+
+然后切换到「流光」输入源，在文本编辑器里输入 `nihao`。**预期**：出现下划线预编辑
+文本，空格或数字键上屏候选。这条链路已经接好并离线验证过（`make selftest`），
+但**从未在真实输入会话里跑过**——本机第一次。
+
+观察诊断输出：`scripts/run-dev.sh`（优先运行已安装副本并收集 stderr）。
+
+**数据已就位**：`~/Library/Glint` 已用 rime-ice 播种并可正常部署
+（`--selftest ~/Library/Glint` 通过 28/28）。这是**开发手段**，不是产品的首次部署
+方式——随包附带方案数据属 M1，且方案版本尚未固定，见 §1.1。移除：`rm -rf ~/Library/Glint`。
 
 **若登录后仍未出现**，下一步试系统级安装（需 sudo，且位置与
 [decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 定的用户级目录不同，
@@ -171,6 +182,16 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 （功能方案 §6.3 对参考实现的说明）。
 
 **离线用例**：`make selftest`，源码在 `sources/SelfTest.swift`。
+
+**键码映射已接通并纳入用例**：`sources/MacOSKeyCodes.swift` 复用自鼠须管
+（GPLv3，已在 [THIRD_PARTY.md](THIRD_PARTY.md) 登记来源、提交与修改）。
+用例现在走**真实路径** —— macOS 虚拟键码 → 映射 → 引擎，因此映射表本身也在覆盖内。
+`T0` 一节定点核对了 9 个键码（字母/空格/回车/Escape/删除/方向键/数字）。
+
+**踩到的第二个坑**：librime 的 `key_table.h`（提供 `XK_*` 与修饰键掩码）
+**不在官方预编译包内**，且它 `#include <X11/keysym.h>` —— macOS 不自带 X11。
+因此本项目按值复述了需要的常量，取值来自 X11 `keysymdef.h`，
+掩码值已逐项对照 `key_table.h` 的 `RimeModifier` 核实。
 
 **2026-09-24 实测结果**（隔离测试数据，rime-ice，`通过 19/19，另有 1 项未覆盖`）
 

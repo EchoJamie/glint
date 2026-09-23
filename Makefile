@@ -61,7 +61,7 @@ CODESIGN_ID  ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
                   | sed -n 's/.*"\(Apple Development:.*\)"/\1/p' | head -1)
 
 .DEFAULT_GOAL := build
-.PHONY: all build sign icons embed-deps embed-licenses install uninstall clean distclean check-ids deps testdata selftest help
+.PHONY: all build sign icons embed-deps embed-licenses seed-userdata install uninstall clean distclean check-ids deps testdata selftest help
 
 all: build
 
@@ -71,6 +71,7 @@ help:
 	@echo "make icons     重新生成输入源图标（M0 占位版）"
 	@echo "make testdata  准备隔离的测试数据目录 $(TESTDATA)"
 	@echo "make selftest  跑候选协议离线用例"
+	@echo "make seed-userdata  把测试数据放进 ~/Library/Glint（开发用）"
 	@echo "make check-ids 核对 Info.plist 与 GlintIds.swift 的标识一致"
 	@echo "make install   安装到 $(INSTALL_DIR)（需显式执行，构建不会自动安装）"
 	@echo "make uninstall 从 $(INSTALL_DIR) 移除，不动个人数据目录"
@@ -166,6 +167,11 @@ uninstall:
 
 icons:
 	@python3 scripts/make-icons.py
+
+# 开发用：让已安装的输入法能真正出候选。不是产品的首次部署方式，
+# 也尚未固定方案版本，理由见 scripts/seed-userdata.sh 的说明。
+seed-userdata: testdata
+	@bash scripts/seed-userdata.sh
 
 deps:
 	@bash scripts/fetch-librime.sh
