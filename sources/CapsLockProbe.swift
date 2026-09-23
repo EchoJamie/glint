@@ -125,9 +125,17 @@ private final class CapsLockMonitor {
     window.center()
 
     let label = NSTextField(wrappingLabelWithString: instructions(seconds: seconds))
-    label.frame = NSRect(x: 20, y: 20, width: frame.width - 40, height: frame.height - 40)
+    label.frame = NSRect(x: 20, y: 70, width: frame.width - 40, height: frame.height - 90)
     label.alignment = .left
     window.contentView?.addSubview(label)
+
+    // 关键：窗口必须是**文本输入客户端**，修饰键事件才可能被路由进来。
+    // 一个没有文本输入上下文的普通窗口可能收不到 flagsChanged——
+    // 这也是为什么下面这个输入框不是装饰，而是实验的一部分。
+    let field = NSTextField(frame: NSRect(x: 20, y: 20, width: frame.width - 40, height: 34))
+    field.placeholderString = "点这里，然后按键（字母应出现在此框中）"
+    window.contentView?.addSubview(field)
+    window.makeFirstResponder(field)
 
     self.window = window
     self.statusLabel = label
@@ -141,6 +149,9 @@ private final class CapsLockMonitor {
       let active = NSApp.isActive
       let key = window.isKeyWindow
       print("窗口状态：应用前台=\(active ? "是" : "否")  窗口获得焦点=\(key ? "是" : "否")")
+      // NSApp.isActive 只是本进程的看法。真实的事件路由由系统决定，
+      // 所以直接问系统「此刻谁在最前」——两者不一致正是本机现象的原因。
+      print("系统认定的前台应用：\(Self.frontmostApplicationName())")
 
       self.verifyChannel(window: window) { healthy in
         self.samples.removeAll()
@@ -163,6 +174,12 @@ private final class CapsLockMonitor {
     }
 
     app.run()
+  }
+
+  /// 系统认定的前台应用。与本进程的 `NSApp.isActive` 对照，
+  /// 用来判断事件实际会被路由到哪里。
+  static func frontmostApplicationName() -> String {
+    NSWorkspace.shared.frontmostApplication?.localizedName ?? "(未知)"
   }
 
   /// 往自己的事件队列投一个合成事件，确认监视器能收到。
@@ -201,22 +218,24 @@ private final class CapsLockMonitor {
 
   private func instructions(seconds: TimeInterval) -> String {
     """
-    接下来的 \(Int(seconds)) 秒里，请对 Caps Lock 键做两次操作：
+    请先点一下下方输入框（确保焦点在窗口里），然后依次做三件事：
 
-      ① 短按一次：快速按下并立即松开（像平时切换大小写那样）
-      ② 长按一次：按住约 1 秒再松开
+      ① 敲一个普通字母，比如 a     ← 对照：它出现而 Caps Lock 不出现，才是真结论
+      ② 短按一次 Caps Lock（快按快放）
+      ③ 长按一次 Caps Lock（按住约 1 秒再松开）
 
-    中间间隔一秒以上，方便区分。
+    每步之间隔一秒以上。窗口标题栏会显示已收到的事件数，
+    变了就说明事件到了——不必等结束。
 
-    探针记录事件，不做任何判断，也不会改动你的大小写状态以外的设置。
+    探针只记录事件，不改动任何设置。
     """
   }
 
   private func record(_ event: NSEvent, source: String) {
-    // 记录**所有**修饰键变化，不只是 Caps Lock。
-    // 这样按一下 Shift 就能确认采集通道是通的——否则用户按了没反应时，
-    // 分不清是通道没接上还是结论本就如此。Shift 不留下任何状态，适合做这个对照。
-    guard event.type == .flagsChanged else { return }
+    // 记录**所有**修饰键变化与普通按键，不只是 Caps Lock。
+    // 普通字母是最关键的对照：它出现、Caps Lock 不出现，才是「Caps Lock 不走
+    // flagsChanged」这个真结论；两者都不出现，则是焦点或通道问题，结论无效。
+    guard event.type == .flagsChanged || event.type == .keyDown else { return }
 
     let caps = event.modifierFlags.contains(.capsLock)
     let sample = Sample(at: Date().timeIntervalSince(start),
@@ -225,10 +244,14 @@ private final class CapsLockMonitor {
                         capsLockOn: caps,
                         flagsRaw: UInt64(bitPattern: Int64(event.modifierFlags.rawValue)))
     samples.append(sample)
+    // 标题栏实时显示计数：用户按键时能立刻看到事件到没到，
+    // 不必等到 20 秒结束才知道白按了。
+    window?.title = "Glint — Caps Lock 探针（已收到 \(samples.count) 条事件）"
 
     let isCaps = event.keyCode == CapsLockProbe.capsLockKeyCode
-    print(String(format: "  [%6.3fs] %@ flagsChanged keyCode=%d%@ capsLock=%@ flags=0x%llx",
-                 sample.at, source, Int(event.keyCode),
+    let kind = event.type == .flagsChanged ? "flagsChanged" : "keyDown     "
+    print(String(format: "  [%6.3fs] %@ %@ keyCode=%d%@ capsLock=%@ flags=0x%llx",
+                 sample.at, source, kind, Int(event.keyCode),
                  isCaps ? "(Caps Lock)" : "", caps ? "开" : "关", sample.flagsRaw))
 
     // 同时读一次会话级状态：它反映的是**整个会话**的真实锁定状态，
@@ -246,19 +269,19 @@ private final class CapsLockMonitor {
     let flips = samples.filter { $0.keyCode == CapsLockProbe.capsLockKeyCode }
     let others = samples.filter { $0.keyCode != CapsLockProbe.capsLockKeyCode }
 
-    print("修饰键事件共 \(samples.count) 条：Caps Lock \(flips.count) 条，其他 \(others.count) 条")
+    print("收到事件共 \(samples.count) 条：Caps Lock \(flips.count) 条，其他 \(others.count) 条")
+    print("报告时系统认定的前台应用：\(Self.frontmostApplicationName())")
 
     guard !flips.isEmpty else {
       print("")
       if others.isEmpty {
-        print("❌ **一条修饰键事件都没收到**——这是采集通道的问题，不是 Caps Lock 的结论。")
-        print("   可能原因：")
-        print("     · 探针窗口没有成为前台窗口（请点一下窗口再按键）")
-        print("     · 事件被系统拦截")
-        print("   请按一下 Shift 试试：若 Shift 也不出现，就是通道问题，本次结果无效。")
+        print("❌ **一条事件都没收到**——采集通道或焦点的问题，不是 Caps Lock 的结论。")
+        print("   自检能收到 in-process 投递的事件，说明监视器本身没问题，")
+        print("   问题在于硬件事件没有路由到本进程。最可能是窗口在系统层面没有真正前台。")
+        print("   请把上面「系统认定的前台应用」一行贴回来——它会直接指出焦点在谁那里。")
       } else {
-        print("⚠️  收到了其他修饰键事件（通道是通的），但**没有 Caps Lock 事件**。")
-        print("   这说明 Caps Lock 没有走 flagsChanged 通道，或它的状态未变化。")
+        print("⚠️  收到了其他事件（通道是通的），但**没有 Caps Lock 事件**。")
+        print("   这本身就是结论：Caps Lock 没有走 flagsChanged 通道，或它的状态未变化。")
       }
       return
     }
