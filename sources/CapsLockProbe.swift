@@ -44,8 +44,7 @@ enum CapsLockProbe {
     print("")
 
     print("")
-    print("即将弹出一个窗口：**请在该窗口处于前台时按 Caps Lock**。")
-    print("按提示先短按一次、再长按一次。")
+    print("即将弹出一个窗口。它会先自检采集通道，通过后再提示你按键。")
     print("")
 
     let monitor = CapsLockMonitor()
@@ -85,18 +84,32 @@ private final class CapsLockMonitor {
   private var window: NSWindow?
   private var statusLabel: NSTextField?
 
+  /// 监视器对象**必须持有**：`addLocalMonitorForEvents` 返回的令牌一旦被释放，
+  /// 监视器就随之失效。丢掉返回值（用 `_ =` 或 `if ... == nil`）会让它立刻被
+  /// ARC 回收——表现为「窗口有焦点但一条事件都收不到」。
+  private var monitors: [Any] = []
+
   func install() {
     // 本地监听：应用在前台时能收到发给自己的事件。
-    NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+    if let token = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown],
+                                                    handler: { [weak self] event in
       self?.record(event, source: "本地")
       return event
+    }) {
+      monitors.append(token)
+    } else {
+      print("⚠️  本地监视器未安装")
     }
+
     // 全局监听：修饰键变化通常不要求辅助功能授权，但 keyDown 会。
-    // 能不能装上本身就是结论的一部分，所以也记下来。
-    if NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged], handler: { [weak self] event in
+    // 能不能装上本身就是结论的一部分。
+    if let token = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged],
+                                                     handler: { [weak self] event in
       self?.record(event, source: "全局")
-    }) == nil {
-      print("⚠️  全局 flagsChanged 监听未能安装")
+    }) {
+      monitors.append(token)
+    } else {
+      print("⚠️  全局 flagsChanged 监视器未安装（可能需要辅助功能授权）")
     }
   }
 
@@ -121,23 +134,69 @@ private final class CapsLockMonitor {
     window.makeKeyAndOrderFront(nil)
     app.activate(ignoringOtherApps: true)
 
-    // 采集通道能不能收到事件，取决于窗口是不是真的拿到了键盘焦点。
-    // 先报一次，免得「没收到事件」时无从判断是通道问题还是结论本身。
+    // 先用合成事件自检采集通道，通过了再让用户按键。
+    // 否则「没收到事件」时无法区分是通道坏了还是结论本就如此，
+    // 白白浪费一次人工操作。自检不需要任何系统权限。
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
       let active = NSApp.isActive
       let key = window.isKeyWindow
       print("窗口状态：应用前台=\(active ? "是" : "否")  窗口获得焦点=\(key ? "是" : "否")")
-      if !key {
-        print("⚠️  窗口没有获得键盘焦点，事件不会送进来。请点一下窗口，再重新运行。")
+
+      self.verifyChannel(window: window) { healthy in
+        self.samples.removeAll()
+        self.start = Date()
+        if healthy {
+          print("")
+          print("── 现在请按键 ──")
+          print("① 短按一次 Caps Lock（快按快放）")
+          print("② 隔一秒，长按一次（按住约 1 秒再松开）")
+          print("")
+        } else {
+          print("")
+          print("自检未通过，继续按键没有意义——请把以上输出贴回来。")
+        }
+        Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { _ in
+          onFinish()
+          NSApp.terminate(nil)
+        }
       }
     }
 
-    start = Date()
-    Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { _ in
-      onFinish()
-      NSApp.terminate(nil)
-    }
     app.run()
+  }
+
+  /// 往自己的事件队列投一个合成事件，确认监视器能收到。
+  ///
+  /// 这是唯一能在无人按键、无系统权限的情况下验证采集通道的办法：
+  /// `NSApp.postEvent` 是进程内 API，不经过系统权限。
+  private func verifyChannel(window: NSWindow, completion: @escaping (Bool) -> Void) {
+    // 56 = kVK_Shift。用 Shift 而不是 Caps Lock：合成事件不会真的翻转锁定状态。
+    guard let event = NSEvent.keyEvent(
+      with: .flagsChanged,
+      location: .zero,
+      modifierFlags: [.shift],
+      timestamp: ProcessInfo.processInfo.systemUptime,
+      windowNumber: window.windowNumber,
+      context: nil,
+      characters: "",
+      charactersIgnoringModifiers: "",
+      isARepeat: false,
+      keyCode: 56
+    ) else {
+      print("自检：无法构造合成事件，跳过")
+      completion(false)
+      return
+    }
+
+    let before = samples.count
+    NSApp.postEvent(event, atStart: false)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+      let received = self.samples.count > before
+      print(received
+            ? "自检：✅ 监视器收到了合成事件，采集通道正常"
+            : "自检：❌ 连合成事件都收不到，监视器本身有问题（不是 Caps Lock 的结论）")
+      completion(received)
+    }
   }
 
   private func instructions(seconds: TimeInterval) -> String {
