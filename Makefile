@@ -59,7 +59,7 @@ CODESIGN_ID  ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
                   | sed -n 's/.*"\(Apple Development:.*\)"/\1/p' | head -1)
 
 .DEFAULT_GOAL := build
-.PHONY: all build sign embed-deps install uninstall clean distclean check-ids deps testdata selftest help
+.PHONY: all build sign embed-deps embed-licenses install uninstall clean distclean check-ids deps testdata selftest help
 
 all: build
 
@@ -88,7 +88,7 @@ $(BUILD_DIR)/%.o: $(RIME_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CLANG) $(C_FLAGS) -c $< -o $@
 
-$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY)
+$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY) LICENSE THIRD_PARTY.md $(wildcard licenses/*.txt)
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources $(FRAMEWORKS)/rime-plugins
 	@$(MAKE) --no-print-directory $(C_OBJECTS)
@@ -97,10 +97,19 @@ $(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPl
 	@cp $(RESOURCES) $(CONTENTS)/Info.plist
 	@cp -R $(LOCALIZATION) $(CONTENTS)/Resources/
 	@plutil -lint $(CONTENTS)/Info.plist
+	@$(MAKE) --no-print-directory embed-licenses
 	@printf 'APPL????' > $(CONTENTS)/PkgInfo
 	@$(MAKE) --no-print-directory embed-deps
 	@$(MAKE) --no-print-directory sign
 	@echo "已构建：$(APP_BUNDLE)"
+
+# librime 与三个插件的许可证必须随二进制一起分发——BSD-3-Clause 与 GPLv3
+# 都要求保留版权声明与许可证正文。THIRD_PARTY.md 登记了组件与提交号。
+embed-licenses:
+	@mkdir -p $(CONTENTS)/Resources/licenses
+	@cp licenses/*.txt $(CONTENTS)/Resources/licenses/
+	@cp LICENSE THIRD_PARTY.md $(CONTENTS)/Resources/
+	@echo "已随包附带 $(words $(wildcard licenses/*.txt)) 份第三方许可证"
 
 # 把 librime 与插件打进 bundle，让产物不依赖构建机的绝对路径。
 # 插件必须放在 Frameworks/rime-plugins/：librime 按自身位置找这个目录名。

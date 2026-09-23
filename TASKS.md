@@ -67,6 +67,10 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 - 用免费 Apple Development 证书签名，`codesign --verify --strict` 通过（D-15）。
 - 输入源注册 / 启用 / 停用 / 切换的命令行入口已实现（尚未执行）。
 - librime 1.17.0 依赖已按固定版本取回并校验和核对（`make deps`），含 lua / octagram / predict 三个插件。
+- **来源与许可已登记**：`THIRD_PARTY.md` 记录各组件、固定提交号与许可证，正文在 `licenses/`，
+  并随包附带到 `Contents/Resources/`。把 dylib 打进产物就产生了保留声明的义务，
+  不是可选项。核对时发现 **GitHub 的 license API 把 librime-octagram 误报为 BSD-3-Clause，
+  其 `LICENSE` 正文实为 GPLv3**——登记按文件正文，不采信分类器。
 
 **尚未完成**
 
@@ -89,15 +93,24 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 **工程结构**
 
 ```text
-Makefile                  build / install / deps / check-ids / uninstall / clean
+Makefile                  build / install / deps / testdata / selftest / check-ids / uninstall
 sources/GlintIds.swift    标识常量（Swift 侧唯一来源）
 sources/Main.swift        进程入口：带参数执行安装命令，不带参数常驻为输入法服务
 sources/GlintInputController.swift   系统输入接入层（当前完全透传按键）
 sources/InputSourceInstaller.swift   输入源注册 / 启用 / 停用 / 切换
+sources/ICloudProbe.swift   iCloud Drive 只读探查
+sources/RimeEngine.swift   librime 的 Swift 封装（会话、候选、确认）
+sources/SelfTest.swift     候选协议离线用例
+sources/KeyCodes.swift     Rime 键码子集
+sources/BridgingHeader.h   只暴露 glint_rime，不暴露 rime_api.h
+sources/rime/glint_rime.{h,c}         librime C API 桥接层
 resources/Info.plist      系统读取的标识定义
 resources/zh-Hans.lproj/  中文名「流光」的本地化
+licenses/                 第三方许可证正文
+THIRD_PARTY.md            组件、提交号与许可证登记
 scripts/check-ids.sh      构建前核对 Info.plist 与 GlintIds.swift 的标识一致
 scripts/fetch-librime.sh  按固定版本 + 校验和取 librime
+scripts/setup-testdata.sh 建立隔离测试数据，拒绝写入 ~/Library/Rime
 ```
 
 **关于 Xcode**：本机 `xcode-select` 指向 CommandLineTools，但 `Makefile` 通过 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 直接使用已安装的 Xcode 27.0，**无需 sudo 切换**。

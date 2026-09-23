@@ -14,6 +14,7 @@ macOS 中文输入法。以 [Rime/librime](https://github.com/rime/librime) 为�
 | [docs/native-candidate-interaction.md](docs/native-candidate-interaction.md) | 卷轴候选与 Touch Bar 的功能与交互方案：窗口状态、排布、按键、Rime 接入与验收清单。 |
 | [docs/implementation-plan.md](docs/implementation-plan.md) | 实施计划：M0–M5 阶段、依赖关系、首版范围、验收条件与投入估算。 |
 | [TASKS.md](TASKS.md) | 任务清单。实施计划的执行视图，记录当前阶段可勾选项、状态与证据。 |
+| [THIRD_PARTY.md](THIRD_PARTY.md) | 第三方组件、固定提交号与许可证登记；许可证正文在 [licenses/](licenses/)。 |
 
 上述文档中的**技术组织、设置清单、格式范围和工期属于执行默认值**，不等同于已经逐项确认的需求；需求以 decisions.md 与 native-candidate-interaction.md 为准。
 
