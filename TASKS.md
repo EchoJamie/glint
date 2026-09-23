@@ -9,6 +9,42 @@
 - 本文件是**执行视图**：把阶段拆成可勾选的任务，记录状态、交付物与实际证据。
 - 勾选规则：只勾选**有证据**的任务。写入文件、构建"能编译"、在一台设备上显示成功，都不等于对应验收项已通过（[实施计划 §7](docs/implementation-plan.md#7-验证与试用安排)）。
 
+## 0. 当前阻塞：需要重新登录
+
+**2026-09-24，首次安装。** 已完成 `make install` 与 `Glint --install`，
+但**系统在当前登录会话里还没有扫描到这个输入源**，需要注销并重新登录。
+
+| 检查项 | 结果 |
+| --- | --- |
+| `make install` 复制到 `~/Library/Input Methods/Glint.app` | ✅ |
+| 安装后 `codesign --verify --strict` | ✅ 通过 |
+| `TISRegisterInputSource` 返回值 | ✅ `noErr` |
+| 系统 TIS 列表中是否出现 | ❌ 331 个输入源中无 glint |
+| 重启 `TextInputMenuAgent` / `TextInputSwitcher` / `imklaunchagent` | ❌ 无效 |
+| `launchctl kickstart` | ❌ SIP 拦截（Operation not permitted） |
+| `open` 让 launchd 拉起已安装的 app | ✅ 进程起来，但注册仍不生效 |
+
+**结论**：这是预期行为，不是构建缺陷。参考实现鼠须管的 `INSTALL.md` 明确写了
+"**without a logout, the App might not work properly**"，我们遇到的是同一件事。
+系统在登录时才扫描输入法目录并建立输入源列表。
+
+**重新登录后要做的事**：执行下面的检查，确认输入源已被系统接住，再继续 T0.3。
+
+```sh
+"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --list-input-sources glint
+"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --enable-input-source
+```
+
+**若登录后仍未出现**，下一步试系统级安装（需 sudo，且位置与
+[decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 定的用户级目录不同，
+属需要一并确认的偏离）：参考实现鼠须管装的是 `/Library/Input Methods/Squirrel.app`，
+并注明需要 sudo。用户级目录理论上受支持（该目录本就存在且带 `.localized`），
+但本机未能验证。
+
+**当前系统状态**：已安装、未注册生效、**未改动任何现有输入源设置**。
+系统偏好里仍只有原来的 ABC，`AppleEnabledInputSources` 中没有 glint。
+回退方式：`make uninstall`。
+
 ## 1. 环境前置核对（2026-09-24 实测）
 
 开工前对本机做了一次只读核对。结果与文档中假定的环境**不一致**，直接改变 M0 的可执行范围。

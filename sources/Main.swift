@@ -31,6 +31,8 @@ struct GlintApp {
         InputSourceInstaller.disable()
       case "--select-input-source":
         InputSourceInstaller.select()
+      case "--list-input-sources":
+        InputSourceInstaller.list(filter: CommandLine.arguments.dropFirst(2).first)
       case "--probe-icloud":
         ICloudProbe.run()
       case "--selftest":
@@ -83,6 +85,8 @@ struct GlintApp {
     Glint --enable-input-source    启用输入源
     Glint --disable-input-source   停用输入源
     Glint --select-input-source    切换到本输入源
+    Glint --list-input-sources [筛选]
+                                   列出系统认识的输入源，排查注册是否生效
     Glint --probe-icloud           iCloud Drive 只读探查（不写入、不读取文件内容）
     Glint --selftest [目录] [--verbose]
                                    候选协议离线用例，需隔离的测试数据（make testdata）

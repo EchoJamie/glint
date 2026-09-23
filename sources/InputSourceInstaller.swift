@@ -43,9 +43,16 @@ enum InputSourceInstaller {
       report("未在 \(appURL.path) 找到 Glint.app。先执行 make install。")
       exit(1)
     }
-    TISRegisterInputSource(appURL as CFURL)
-    report("已从 \(appURL.path) 注册输入源。")
-    report("若输入源菜单中尚未出现，请注销并重新登录。")
+    // 返回值必须看：注册失败时系统不报错也不提示，只体现在这个 OSStatus 上。
+    let status = TISRegisterInputSource(appURL as CFURL)
+    if status == noErr {
+      report("已从 \(appURL.path) 注册输入源。")
+      report("若输入源菜单中尚未出现，请注销并重新登录。")
+    } else {
+      report("注册失败，OSStatus = \(status)")
+      report("   常见原因：签名无效、打包不完整、bundle 不在标准输入法目录下。")
+      exit(1)
+    }
   }
 
   static func enable() {
@@ -86,6 +93,47 @@ enum InputSourceInstaller {
       }
       let status = TISSelectInputSource(source)
       report(status == noErr ? "已切换到：\(id)" : "切换失败（\(status)）：\(id)")
+    }
+  }
+
+  /// 列出系统当前认识的全部输入源。
+  ///
+  /// 存在的理由：注册与启用是**两个进程**（每次调用一个子命令），注册是否已经
+  /// 对系统生效无法凭返回值判断。这个方法把 TIS 实际看到的东西打出来，
+  /// 用来区分「没注册上」「注册了但没启用」「有多个同名残留」。
+  ///
+  /// `includeAllInstalled` 传 true，因此包含已安装但未启用的输入源。
+  static func list(filter: String?) {
+    guard let sources = TISCreateInputSourceList(nil, true)?.takeRetainedValue() as? [TISInputSource] else {
+      report("TISCreateInputSourceList 返回空，无法列出输入源。")
+      return
+    }
+
+    var matched = 0
+    report("TIS 可见的输入源共 \(sources.count) 个" + (filter.map { "，筛选「\($0)」" } ?? ""))
+
+    for source in sources {
+      let id = stringProperty(of: source, kTISPropertyInputSourceID) ?? "(无 ID)"
+      if let filter, !id.localizedCaseInsensitiveContains(filter) { continue }
+      matched += 1
+
+      let kind = stringProperty(of: source, kTISPropertyInputSourceType) ?? "?"
+      let enabled = boolProperty(of: source, kTISPropertyInputSourceIsEnabled).map { $0 ? "已启用" : "未启用" } ?? "?"
+      let selectable = boolProperty(of: source, kTISPropertyInputSourceIsSelectCapable).map { $0 ? "可选" : "不可选" } ?? "?"
+      let bundle = stringProperty(of: source, kTISPropertyBundleID) ?? "-"
+
+      print("  \(id)")
+      print("      类型 \(kind)  \(enabled)  \(selectable)  bundle=\(bundle)")
+    }
+
+    if let filter, matched == 0 {
+      report("没有匹配「\(filter)」的输入源。")
+      report("注册未生效的常见原因：")
+      report("  1. 应用不在 ~/Library/Input Methods/ 下时，TISRegisterInputSource 不会生效")
+      report("  2. 注册与生效之间常需注销并重新登录")
+      report("  3. 签名无效时系统会静默拒绝")
+    } else if filter == nil {
+      report("（未筛选，以上为全部）")
     }
   }
 
