@@ -15,7 +15,8 @@
 | 硬件 | Mac mini `Mac17,16`，Apple M5 Pro，64 GB | ⚠️ **无实体 Touch Bar**，T0.4 实机验收在本机无法完成 |
 | 鼠须管 App | 未安装：`/Library/Input Methods/` 与 `~/Library/Input Methods/` 下均无 `Squirrel.app` | 🔴 见下 |
 | `~/Library/Rime` | **不存在** | 🔴 无法在本机取得 D-03 的体验基线（全拼方案、词库、插件组合） |
-| 参考仓库 clone | 本机未找到 `rime/squirrel` 检出 | 🟡 需自行 clone 并固定到 `0cd71a6130a5866b0ae6ba0494929ebdc8211194` |
+| 参考仓库 clone | ✅ 2026-09-24 已 clone 并固定，见 §1.1 | 计划 §3 的 10 个复用文件全部存在 |
+| rime-ice 词库 | ⚠️ 本机 clone 的是**今天 main**（`9e66b072`），非实际使用版本 | 需从另一台机器反查实际版本后再固定 |
 | iCloud Drive | `~/Library/Mobile Documents/com~apple~CloudDocs` 存在 | ✅ T0.1 的 iCloud 只读探查可开展 |
 | `.icloud` 占位文件 | 顶层未发现 | ✅ 与 [decisions.md 3.2](docs/decisions.md#32-icloud-同步) 记录一致；实现仍须处理 |
 | 签名证书 | `Apple Development: echojamieee@outlook.com (9JHY98AJMC)`，1 个有效身份 | ✅ 与 D-15 一致 |
@@ -24,9 +25,25 @@
 | Git 身份 | 本机无全局 git 配置 | ✅ 已在本仓库设为 `EchoJamie <echojamieee@outlook.com>`，仅本仓库生效 |
 | 仓库名 | 本目录为 `glint`；D-13 定的仓库名是 **`glint-ime`** | 🟡 创建远端时按 `glint-ime`，或先统一本地目录名 |
 
-**🔴 基线缺口**：D-03 要求「将当前可接受的全拼方案和词库组合视为体验基线」，T0.1 要求「记录实际使用的全拼方案及必要插件」。本机既无鼠须管也无 `~/Library/Rime`，这些**只能从实际使用鼠须管的那台 Mac 取得**（该机据文档为 Squirrel 1.1.2 / librime 1.16.0，用户词典 `rime_ice.userdb`，取自雾凇拼音 `rime-ice`）。
+### 1.1 参考仓库与方案数据（2026-09-24 已就位）
 
-T0.1 不必等它——最小原型可以先跑通，但"固定基线"这一条在拿到导出数据前不能勾选。
+全部放在 glint **之外**，按 D-04 保持参考用途，不进入本仓库、不作为交付物。
+
+| 路径 | 内容 | 固定版本 |
+| --- | --- | --- |
+| `/Users/echo/namespace/github/rime/squirrel` | 参考实现。计划 §3 列出的 10 个复用文件**已逐一确认存在**（`SquirrelInputController.swift` 642 行等） | `0cd71a6130a5866b0ae6ba0494929ebdc8211194` |
+| `/Users/echo/namespace/github/rime/rime-ice` | 雾凇拼音方案与词库。`cn_dicts/` 共 **1,919,066** 条词条 | ⚠️ `9e66b072`（今天 main，非实际使用版本） |
+
+**librime 构建方式**（摘自 Squirrel Makefile，供 T0.1 参考）：`make -C librime deps` → `make -C librime release install`，产出 `librime/dist/lib/librime.1.dylib` 与 `rime-plugins/`。子模块钉在 `33e78140250125871856cdc5b42ddc6a5fcd3cd4`，与 D-02 锁定的 1.17.0 一致。
+
+**🔴 基线缺口**：D-03 要求「将当前可接受的全拼方案和词库组合视为体验基线」，T0.1 要求「记录实际使用的全拼方案及必要插件」。方案源码可以从 GitHub 拿到，但**下面两项拿不到**：
+
+1. 实际使用的 rime-ice **版本**——文档从未记录，本机 clone 的是今天 main，与用户实际部署的不是同一份。
+2. 用户在 `~/Library/Rime` 下对方案做过的 `*.custom.yaml` 改写——这部分不在任何公开仓库里。
+
+**取证方式**：另一台 Mac 上把 `~/Library/Rime` 打成一包，**排除 `build/` 与 `*.userdb/`**，体积约几百 KB。个人学习词条不进这个包（那是 M4 迁移的事），因此不涉及个人输入内容外传。
+
+T0.1 不必等它——最小原型可以先跑通；但"固定基线"这一条在拿到该包之前不能勾选。
 
 ## 2. M0：技术原型
 
