@@ -1,10 +1,10 @@
 # 任务清单
 
 - 日期：2026-09-24
-- 状态：**M0 进行中**。工程骨架已建立，librime 1.17.0 已接入并嵌入产物，
-候选协议（全局索引读取 / 高亮 / 确认）已通过 19/19 离线用例。
-但仍**不能输入汉字**——输入控制器对按键一律透传，尚未接上这条链路；
-候选窗口与 Touch Bar 未开始。
+- 状态：**M0 进行中，已首次安装**。librime 1.17.0 已接入并嵌入产物，
+候选协议（全局索引读取 / 高亮 / 确认）与真实按键路径已通过 **28/28** 离线用例。
+输入控制器已接上引擎（预编辑 + 提交），**但从未在真实输入会话里跑过**——
+首次安装后需要注销重新登录，见 §0。候选窗口与 Touch Bar 未开始。
 - 权威来源：[实施计划](docs/implementation-plan.md)（阶段、依赖、范围、验收、估算）、[功能方案](docs/native-candidate-interaction.md)（候选与 Touch Bar 交互契约）。
 - 本文件是**执行视图**：把阶段拆成可勾选的任务，记录状态、交付物与实际证据。
 - 勾选规则：只勾选**有证据**的任务。写入文件、构建"能编译"、在一台设备上显示成功，都不等于对应验收项已通过（[实施计划 §7](docs/implementation-plan.md#7-验证与试用安排)）。
@@ -127,15 +127,14 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 
 **尚未完成**
 
-- **librime 尚未链接进产物。** 依赖已就位，但 Rime 会话、预编辑与提交属于 T0.2 的范围，本轮没有接入——因此当前产物还不能输入汉字。
-- 隔离测试数据目录尚未建立（`GlintIds.userDataURL` 只有常量，未使用）。
 - 「记录实际使用的全拼方案及必要插件」**受阻**，见 §1 基线缺口，需从另一台 Mac 导出。
 - 最低 macOS 版本未实测：`Makefile` 里的 `13.0` 只是构建所需的形式值，**不构成兼容承诺**（D-14）。
 
 **交付物**
 
 - [x] 构建成功的最小输入法产物（`make build`，产物可启动、可签名校验）
-- [~] 依赖与环境清单——librime 固定版本与工具链已记录（§1、§1.1），**最低 macOS 版本待实测**
+- [x] 依赖与环境清单——librime 固定版本、工具链、许可证已记录（§1、§1.1、THIRD_PARTY.md）
+- 🟡 最低 macOS 版本仍未实测（D-14）：`Makefile` 里的 `13.0` 只是形式值
 - [x] 构建步骤与安装步骤分离，可重复执行
 
 **顺带核实**（只读探查，不建立同步逻辑）
@@ -149,12 +148,12 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 Makefile                  build / install / deps / testdata / selftest / check-ids / uninstall
 sources/GlintIds.swift    标识常量（Swift 侧唯一来源）
 sources/Main.swift        进程入口：带参数执行安装命令，不带参数常驻为输入法服务
-sources/GlintInputController.swift   系统输入接入层（当前完全透传按键）
+sources/GlintInputController.swift   系统输入接入层（已接引擎：会话、预编辑、提交）
 sources/InputSourceInstaller.swift   输入源注册 / 启用 / 停用 / 切换
 sources/ICloudProbe.swift   iCloud Drive 只读探查
 sources/RimeEngine.swift   librime 的 Swift 封装（会话、候选、确认）
 sources/SelfTest.swift     候选协议离线用例
-sources/KeyCodes.swift     Rime 键码子集
+sources/MacOSKeyCodes.swift  macOS 键码 → librime 键码（复用自鼠须管）
 sources/BridgingHeader.h   只暴露 glint_rime，不暴露 rime_api.h
 sources/rime/glint_rime.{h,c}         librime C API 桥接层
 resources/Info.plist      系统读取的标识定义
@@ -164,13 +163,16 @@ THIRD_PARTY.md            组件、提交号与许可证登记
 scripts/check-ids.sh      构建前核对 Info.plist 与 GlintIds.swift 的标识一致
 scripts/fetch-librime.sh  按固定版本 + 校验和取 librime
 scripts/setup-testdata.sh 建立隔离测试数据，拒绝写入 ~/Library/Rime
-scripts/make-icons.py     生成输入源图标 PDF（M0 占位版）
+scripts/make-icons.py     生成输入源图标 PDF 与 app 图标 icns（M0 占位版）
 scripts/run-dev.sh        前台运行并收集诊断输出，供 T0.3 观察会话事件
+scripts/seed-userdata.sh  把测试数据放进 ~/Library/Glint（开发用，非产品部署方式）
 ```
 
 **关于 Xcode**：本机 `xcode-select` 指向 CommandLineTools，但 `Makefile` 通过 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 直接使用已安装的 Xcode 27.0，**无需 sudo 切换**。
 
-**设计取舍**：当前输入控制器对按键一律返回 `false`，即完全透传。这样即便输入源被启用也不会打断正常打字——T0.1 的目标是证明接入通道可用，不是实现输入行为（那是 M1）。
+**设计取舍**：输入控制器已接引擎，但 `Command` 组合键一律不拦，认不出的键原样交回宿主。
+引擎未处理的键也暂时交回——「组合进行中是否应该拦截」属于 T0.3 按键路由验证的内容，
+在拿到真实会话结果前不预设。
 
 ---
 
@@ -196,10 +198,11 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 因此本项目按值复述了需要的常量，取值来自 X11 `keysymdef.h`，
 掩码值已逐项对照 `key_table.h` 的 `RimeModifier` 核实。
 
-**2026-09-24 实测结果**（隔离测试数据，rime-ice，`通过 19/19，另有 1 项未覆盖`）
+**2026-09-24 实测结果**（隔离测试数据，rime-ice，`通过 28/28，另有 1 项未覆盖`）
 
 | 用例 | 结果 |
 | --- | --- |
+| **键码映射定点核对**（9 项：字母/空格/回车/Escape/删除/方向键/数字） | ✅ |
 | 部署完成 / 会话可创建 | ✅ |
 | 按键被引擎接收 | ✅ 5/5 |
 | 读到候选 | ✅ 30 项，真实候选（你好 / 👋 / 拟好 / 你 / 尼） |
@@ -218,13 +221,20 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 | 同字不同候选身份可区分 | ⚠️ **未覆盖**——本方案不返回注释，该场景不存在 |
 
 **产物自包含**：librime 与三个插件嵌入 `Contents/Frameworks/`，
-用 `@executable_path/../Frameworks` 定位。**移走 `deps/` 后用例仍 19/19 通过**，
+用 `@executable_path/../Frameworks` 定位。**移走 `deps/` 后用例仍全部通过**，
 确认产物不依赖构建机的绝对路径。
 
-**踩到的坑（值得记住）**：librime 的 `process_key` 收的是 **IBus / X11 键码**，
-不是 macOS 虚拟键码。直接传 `NSEvent.keyCode`（`n`=45）会被引擎当成别的字符，
-表现为「部分按键被接收」这种难查的现象。小写字母要用 ASCII 值（`n`=110）。
-完整映射见参考实现 `sources/MacOSKeyCodes.swift`，M1 复用。
+**踩到的坑（值得记住）**
+
+1. librime 的 `process_key` 收的是 **IBus / X11 键码**，不是 macOS 虚拟键码。
+   直接传 `NSEvent.keyCode`（`n`=45）会被引擎当成别的字符，表现为「部分按键被接收」
+   这种难查的现象。小写字母要用 ASCII 值（`n`=110）。
+2. librime 的 `key_table.h`（提供 `XK_*` 与修饰键掩码）**不在官方预编译包内**，
+   且它 `#include <X11/keysym.h>`——macOS 不自带 X11。本项目按值复述所需常量，
+   取值来自 X11 `keysymdef.h`，掩码值逐项对照 `key_table.h` 的 `RimeModifier` 核实。
+
+映射表已按计划 §3 复用参考实现并纳入用例（`sources/MacOSKeyCodes.swift`，
+来源与修改见 [THIRD_PARTY.md](THIRD_PARTY.md)），不再是待办。
 
 **尚未完成**
 
