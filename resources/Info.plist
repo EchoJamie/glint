@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  标识取值见 docs/decisions.md 5.4 节。
+	  此处与 sources/GlintIds.swift 必须一致，`make check-ids` 会核对。
+	  输入源 ID 一旦变更，系统内已注册的输入源会失效。
+	-->
+	<key>TISInputSourceID</key>
+	<string>com.github.echojamie.glint</string>
+
+	<key>CFBundleIdentifier</key>
+	<string>com.github.echojamie.glint</string>
+	<key>CFBundleExecutable</key>
+	<string>Glint</string>
+	<key>CFBundleName</key>
+	<string>Glint</string>
+	<key>CFBundleDisplayName</key>
+	<string>Glint</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.1.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+
+	<!-- 输入法常驻但不进入 Dock 与菜单栏 -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSBackgroundOnly</key>
+	<false/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+
+	<!-- Caps Lock 保留既定的「原始拼音上屏后切换中英文」行为 -->
+	<key>TICapsLockLanguageSwitchCapable</key>
+	<true/>
+
+	<key>InputMethodConnectionName</key>
+	<string>Glint_Connection</string>
+	<key>InputMethodServerControllerClass</key>
+	<string>Glint.GlintInputController</string>
+	<key>InputMethodServerDelegateClass</key>
+	<string>Glint.GlintInputController</string>
+
+	<!--
+	  只做简体，不做繁体。输入源 ID 仍保留 .Hans 后缀：
+	  日后若要加繁体，保留后缀意味着不必改 ID（见 decisions.md 5.4）。
+	  图标（tsInputModeMenuIconFileKey 等）尚未产出，M0 用系统默认占位；
+	  正式图标在 M1 前交付（见 decisions.md 5.4 的图标待办）。
+	-->
+	<key>ComponentInputModeDict</key>
+	<dict>
+		<key>tsInputModeListKey</key>
+		<dict>
+			<key>com.github.echojamie.glint.Hans</key>
+			<dict>
+				<key>TISInputSourceID</key>
+				<string>com.github.echojamie.glint.Hans</string>
+				<key>TISIntendedLanguage</key>
+				<string>zh-Hans</string>
+				<key>tsInputModeCharacterRepertoireKey</key>
+				<array>
+					<string>Hans</string>
+				</array>
+				<key>tsInputModeDefaultStateKey</key>
+				<true/>
+				<key>tsInputModeIsVisibleKey</key>
+				<true/>
+				<key>tsInputModeKeyEquivalentModifiersKey</key>
+				<integer>4608</integer>
+				<key>tsInputModePrimaryInScriptKey</key>
+				<true/>
+				<key>tsInputModeScriptKey</key>
+				<string>smUnicodeScript</string>
+			</dict>
+		</dict>
+		<key>tsVisibleInputModeOrderedArrayKey</key>
+		<array>
+			<string>com.github.echojamie.glint.Hans</string>
+		</array>
+	</dict>
+</dict>
+</plist>

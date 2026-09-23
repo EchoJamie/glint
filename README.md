@@ -35,7 +35,25 @@ macOS 中文输入法。以 [Rime/librime](https://github.com/rime/librime) 为�
 
 ## 构建与安装
 
-尚未开始，构建方式待 M0 确定（见 [TASKS.md](TASKS.md) T0.1）。
+需要 Xcode 与 `make`。Xcode 已安装时无需 `sudo xcode-select`——`Makefile` 通过 `DEVELOPER_DIR` 直接使用它。
+
+```sh
+make deps      # 取固定版本的 librime 1.17.0 到 deps/dist/（校验和核对）
+make build     # 产出 build/Glint.app，不安装
+make install   # 复制到 ~/Library/Input Methods/，须显式执行
+```
+
+构建与安装是分开的两步，`make build` **不触碰系统**。安装后还需向系统注册输入源：
+
+```sh
+"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --install
+```
+
+`make uninstall` 只移除程序，不删除 `~/Library/Glint` 下的个人数据——卸载程序与删除个人数据是两件事。
+
+只构建 Apple Silicon（arm64），不构建 Intel、不做通用二进制。
+
+> **当前状态**：M0 骨架，**尚不能输入汉字**。librime 依赖已就位但尚未链接，输入控制器对按键一律透传——因此即便启用也不会打断正常打字。见 [TASKS.md](TASKS.md) T0.1。
 
 首版**只发布源码，不发布二进制**。签名使用免费 Apple Development 证书，仅适用于本机开发与自用；向他人分发二进制需要 `Developer ID Application` 证书（仅付费账号可得）。需要安装包的人自行构建。
 

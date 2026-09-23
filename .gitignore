@@ -24,6 +24,7 @@ Package.resolved
 deps/build/
 deps/prefix/
 deps/dist/
+deps/cache/
 vendor/
 
 # 原型与测试用的隔离数据目录；不得提交真实个人词条

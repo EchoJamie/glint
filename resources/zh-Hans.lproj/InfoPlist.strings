@@ -1,0 +1,5 @@
+/* 中文本地化：中文名「流光」，英文名 Glint。
+   见 docs/decisions.md 5.4 节。 */
+
+CFBundleDisplayName = "流光";
+CFBundleName = "流光";

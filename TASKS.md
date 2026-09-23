@@ -1,7 +1,7 @@
 # 任务清单
 
 - 日期：2026-09-24
-- 状态：**M0 未开始**。仓库已初始化，当前无代码。
+- 状态：**M0 进行中**。仓库与工程骨架已建立（`make build` 通过），librime 依赖已就位但**尚未接入**，尚不能输入汉字。
 - 权威来源：[实施计划](docs/implementation-plan.md)（阶段、依赖、范围、验收、估算）、[功能方案](docs/native-candidate-interaction.md)（候选与 Touch Bar 交互契约）。
 - 本文件是**执行视图**：把阶段拆成可勾选的任务，记录状态、交付物与实际证据。
 - 勾选规则：只勾选**有证据**的任务。写入文件、构建"能编译"、在一台设备上显示成功，都不等于对应验收项已通过（[实施计划 §7](docs/implementation-plan.md#7-验证与试用安排)）。
@@ -53,23 +53,53 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 
 ---
 
-### [ ] T0.1 基线与独立原型
+### [~] T0.1 基线与独立原型　—— **骨架已建，Rime 未接入**
 
-**具体工作**
-- 创建独立工程：bundle identifier、输入源 identifier、连接名、安装目录、用户数据目录一律用 [README 标识表](README.md#项目标识) / [decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 的值，不用占位名。
-- 建源代码文件时即在文件头写入 `Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>` 与 GPLv3 声明——事后补要改动全部源文件。
-- 准备隔离的测试数据目录（不与 `~/Library/Rime` 同构共享）。
-- 接入 librime **1.17.0**（固定版本，尽量不改引擎源码），确认构建与安装**相互分离**（构建不隐式安装）。
-- 记录实际使用的全拼方案及必要插件。→ **受阻**，见 §1 基线缺口，需从另一台 Mac 导出。
+**已完成（2026-09-24）**
+
+- 独立工程骨架，标识全部使用 [decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 的已定值，无占位名。
+- 所有源文件头已写入 `Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>` 与 GPLv3 声明。
+- **构建与安装分离**：`make build` 只产出 `build/Glint.app`，不触碰系统；`make install` 才复制到 `~/Library/Input Methods/`，需显式执行。
+- 只构建 arm64，产物经 `lipo` 确认非通用二进制（D-14）。
+- 用免费 Apple Development 证书签名，`codesign --verify --strict` 通过（D-15）。
+- 输入源注册 / 启用 / 停用 / 切换的命令行入口已实现（尚未执行）。
+- librime 1.17.0 依赖已按固定版本取回并校验和核对（`make deps`），含 lua / octagram / predict 三个插件。
+
+**尚未完成**
+
+- **librime 尚未链接进产物。** 依赖已就位，但 Rime 会话、预编辑与提交属于 T0.2 的范围，本轮没有接入——因此当前产物还不能输入汉字。
+- 隔离测试数据目录尚未建立（`GlintIds.userDataURL` 只有常量，未使用）。
+- 「记录实际使用的全拼方案及必要插件」**受阻**，见 §1 基线缺口，需从另一台 Mac 导出。
+- 最低 macOS 版本未实测：`Makefile` 里的 `13.0` 只是构建所需的形式值，**不构成兼容承诺**（D-14）。
 
 **交付物**
-- [ ] 构建成功的最小输入法产物
-- [ ] 依赖与环境清单（含 librime 固定版本、最低 macOS 版本实测记录）
-- [ ] 构建步骤与安装步骤分离，可重复执行
 
-**顺带核实**（成本低、能提前暴露问题，只做只读探查，**不建立同步逻辑**）
+- [x] 构建成功的最小输入法产物（`make build`，产物可启动、可签名校验）
+- [~] 依赖与环境清单——librime 固定版本与工具链已记录（§1、§1.1），**最低 macOS 版本待实测**
+- [x] 构建步骤与安装步骤分离，可重复执行
+
+**顺带核实**（只读探查，不建立同步逻辑）
+
 - [ ] 非沙盒进程读写 `~/Library/Mobile Documents/com~apple~CloudDocs` 是否触发系统授权提示、提示出现在什么时机
 - [ ] 未下载的 `.icloud` 占位文件在读写时的实际表现
+
+**工程结构**
+
+```text
+Makefile                  build / install / deps / check-ids / uninstall / clean
+sources/GlintIds.swift    标识常量（Swift 侧唯一来源）
+sources/Main.swift        进程入口：带参数执行安装命令，不带参数常驻为输入法服务
+sources/GlintInputController.swift   系统输入接入层（当前完全透传按键）
+sources/InputSourceInstaller.swift   输入源注册 / 启用 / 停用 / 切换
+resources/Info.plist      系统读取的标识定义
+resources/zh-Hans.lproj/  中文名「流光」的本地化
+scripts/check-ids.sh      构建前核对 Info.plist 与 GlintIds.swift 的标识一致
+scripts/fetch-librime.sh  按固定版本 + 校验和取 librime
+```
+
+**关于 Xcode**：本机 `xcode-select` 指向 CommandLineTools，但 `Makefile` 通过 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 直接使用已安装的 Xcode 27.0，**无需 sudo 切换**。
+
+**设计取舍**：当前输入控制器对按键一律返回 `false`，即完全透传。这样即便输入源被启用也不会打断正常打字——T0.1 的目标是证明接入通道可用，不是实现输入行为（那是 M1）。
 
 ---
 
