@@ -35,6 +35,10 @@ struct GlintApp {
         InputSourceInstaller.list(filter: CommandLine.arguments.dropFirst(2).first)
       case "--probe-icloud":
         ICloudProbe.run()
+      case "--probe-capslock":
+        // 可选：Glint --probe-capslock [秒数]
+        let seconds = CommandLine.arguments.dropFirst(2).first.flatMap(Double.init) ?? 20
+        exit(CapsLockProbe.run(seconds: seconds))
       case "--selftest":
         // 可选：Glint --selftest [测试数据目录] [--verbose]
         let rest = Array(CommandLine.arguments.dropFirst(2))
@@ -88,6 +92,7 @@ struct GlintApp {
     Glint --list-input-sources [筛选]
                                    列出系统认识的输入源，排查注册是否生效
     Glint --probe-icloud           iCloud Drive 只读探查（不写入、不读取文件内容）
+    Glint --probe-capslock [秒数]  实机验证 Caps Lock 长按能否测得（需交互）
     Glint --selftest [目录] [--verbose]
                                    候选协议离线用例，需隔离的测试数据（make testdata）
     Glint --help                   显示本说明
