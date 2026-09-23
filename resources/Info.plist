@@ -18,6 +18,10 @@
 	<string>Glint</string>
 	<key>CFBundleDisplayName</key>
 	<string>Glint</string>
+	<!-- Finder / 关于本机等处显示的图标。M0 占位版，
+	     由 scripts/make-icons.py 生成；正式图标在 M1 前交付。 -->
+	<key>CFBundleIconFile</key>
+	<string>GlintIcon</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleLocalizations</key>

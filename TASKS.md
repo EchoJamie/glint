@@ -113,9 +113,12 @@ M0 使用固定测试候选和**隔离的 Rime 数据目录**，不对任何现�
 - 只构建 arm64，产物经 `lipo` 确认非通用二进制（D-14）。
 - 用免费 Apple Development 证书签名，`codesign --verify --strict` 通过（D-15）。
 - 输入源注册 / 启用 / 停用 / 切换的命令行入口已实现（尚未执行）。
-- **输入源图标已有 M0 占位版**：`resources/glint.pdf`，四角星（闪光，对应 Glint
-  「一闪而过的光」），由 `scripts/make-icons.py` 手写 PDF 生成，不引入图形库。
-  正式图标仍是 M1 前交付项，app 图标（Asset Catalog）未做。
+- **图标已有 M0 占位版**，由 `scripts/make-icons.py` 手写 PDF 生成，不引入图形库：
+  输入源菜单用 `resources/glint.pdf`（透明底黑色四角星，16 px 下可辨认，
+  系统会按明暗自动着色）；app 图标用 `resources/GlintIcon.icns`
+  （深蓝底白色四角星，经 sips + iconutil 生成），已确认被系统接受。
+  正式图标仍是 M1 前交付项。**注意**：这里没有走 Asset Catalog——
+  直接给 .icns 更简单，代价是少了明暗与可访问性变体。
 - librime 1.17.0 依赖已按固定版本取回并校验和核对（`make deps`），含 lua / octagram / predict 三个插件。
 - **来源与许可已登记**：`THIRD_PARTY.md` 记录各组件、固定提交号与许可证，正文在 `licenses/`，
   并随包附带到 `Contents/Resources/`。把 dylib 打进产物就产生了保留声明的义务，

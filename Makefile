@@ -16,8 +16,10 @@ SOURCES_DIR  := sources
 RIME_DIR     := $(SOURCES_DIR)/rime
 RESOURCES    := resources/Info.plist
 LOCALIZATION := resources/zh-Hans.lproj
-# 输入源菜单图标（M0 占位版），由 scripts/make-icons.py 生成
+# 图标（均为 M0 占位版），由 scripts/make-icons.py 生成
+# 输入源菜单图标（透明底矢量）与 app 图标（.icns）
 ICON         := resources/glint.pdf
+APP_ICON     := resources/GlintIcon.icns
 
 SWIFT_SOURCES := $(wildcard $(SOURCES_DIR)/*.swift)
 C_SOURCES     := $(wildcard $(RIME_DIR)/*.c)
@@ -92,7 +94,7 @@ $(BUILD_DIR)/%.o: $(RIME_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CLANG) $(C_FLAGS) -c $< -o $@
 
-$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY) $(ICON) LICENSE THIRD_PARTY.md $(wildcard licenses/*.txt)
+$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY) $(ICON) $(APP_ICON) LICENSE THIRD_PARTY.md $(wildcard licenses/*.txt)
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources $(FRAMEWORKS)/rime-plugins
 	@$(MAKE) --no-print-directory $(C_OBJECTS)
@@ -100,7 +102,7 @@ $(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPl
 		$(SWIFT_SOURCES) $(LINK_FLAGS)
 	@cp $(RESOURCES) $(CONTENTS)/Info.plist
 	@cp -R $(LOCALIZATION) $(CONTENTS)/Resources/
-	@cp $(ICON) $(CONTENTS)/Resources/
+	@cp $(ICON) $(APP_ICON) $(CONTENTS)/Resources/
 	@plutil -lint $(CONTENTS)/Info.plist
 	@$(MAKE) --no-print-directory embed-licenses
 	@printf 'APPL????' > $(CONTENTS)/PkgInfo
