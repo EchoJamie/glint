@@ -43,6 +43,9 @@ enum CapsLockProbe {
     print("  全局事件监听                : \(tapWorks ? "可用" : "不可用（需辅助功能授权）")")
     print("")
 
+    reportInputPath()
+    print("")
+
     print("")
     print("即将弹出一个窗口。它会先自检采集通道，通过后再提示你按键。")
     print("")
@@ -56,6 +59,32 @@ enum CapsLockProbe {
       monitor.report()
     }
     return 0
+  }
+
+  /// 判断输入是本地键盘还是远程注入。
+  ///
+  /// **这一点会污染结论，必须先说清楚。** 若按键来自通用控制之类的远程输入，
+  /// 那么测出的是**该路径的行为**，不是本地键盘的行为：远程输入可能不转发
+  /// Caps Lock 这类本地翻转键，只传最终修饰键状态。
+  /// 在拿到本地键盘的数据之前，不能把这个结果当作操作系统的性质。
+  ///
+  /// 依据：参考实现在处理修饰键时专门写了 `inferModifierKeycode`，
+  /// 注释是「Some remote desktop tools send flagsChanged with keyCode 0」——
+  /// 说明远程输入的事件形态确实与本地不同。
+  private static func reportInputPath() {
+    let universalControl = NSRunningApplication
+      .runningApplications(withBundleIdentifier: "com.apple.universalcontrol")
+      .contains { !$0.isTerminated }
+
+    print("输入路径：")
+    print("  通用控制（Universal Control）: \(universalControl ? "**运行中**" : "未运行")")
+    if universalControl {
+      print("")
+      print("  ⚠️  通用控制正在运行。若你的键鼠接在另一台设备上，按键是远程注入的。")
+      print("      结论只反映**远程输入这条路径**，不代表本地键盘的行为——")
+      print("      远程输入可能不转发 Caps Lock 这类本地翻转键。")
+      print("      要得到产品实际会遇到的结论，请在**接键盘的那台机器**上跑同一个探针。")
+    }
   }
 
   private static func canCreateEventTap() -> Bool {

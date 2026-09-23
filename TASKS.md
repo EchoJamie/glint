@@ -63,6 +63,7 @@ G="$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint"
 | 检查项 | 实测结果 | 影响 |
 | --- | --- | --- |
 | 硬件 | Mac mini `Mac17,16`，Apple M5 Pro，64 GB | ⚠️ **无实体 Touch Bar**，T0.4 实机验收在本机无法完成 |
+| **输入设备** | 本机**无直连键盘**（IOKit 查询为 0）；键鼠经**通用控制**来自 `Jamie's MacBook Pro` | 🔴 见 §3.0：所有按键都是远程注入，测出的行为不等于本地键盘 |
 | 鼠须管 App | 未安装：`/Library/Input Methods/` 与 `~/Library/Input Methods/` 下均无 `Squirrel.app` | 🔴 见下 |
 | `~/Library/Rime` | **不存在** | 🔴 无法在本机取得 D-03 的体验基线（全拼方案、词库、插件组合） |
 | 参考仓库 clone | ✅ 2026-09-24 已 clone 并固定，见 §1.1 | 计划 §3 的 10 个复用文件全部存在 |
@@ -315,6 +316,27 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 [实施计划 §1](docs/implementation-plan.md#1-实施路线与首版完成标准)将其列为「首版核心体验稳定
 之后独立验证」的可选增强；[decisions.md 3](docs/decisions.md#3-架构职责边界)记录了待验证的
 具体问题。本节记录探索进展。
+
+### 3.0 🔴 本机测不准：输入全部来自通用控制
+
+2026-09-24 查明：**这台 Mac mini 没有直连键盘**（IOKit 查询键盘数为 0），
+键鼠经**通用控制**来自 `Jamie's MacBook Pro`——也就是装着鼠须管、放着
+`~/Library/Rime` 的那台机器。
+
+这直接决定了本项探索在哪测：
+
+| | 结论有效性 |
+| --- | --- |
+| 在 mini 上经通用控制测 | 只反映**远程输入这条路径**。远程输入可能不转发 Caps Lock 这类本地翻转键，只传最终修饰键状态 |
+| 在 MacBook Pro 上用本地键盘测 | ✅ 这才是产品实际会遇到的配置 |
+
+**依据**：参考实现在处理修饰键时专门写了 `inferModifierKeycode`，注释是
+"Some remote desktop tools send flagsChanged with keyCode 0"——上游作者知道
+远程输入的事件形态与本地不同，这正是同一类问题。
+
+**探针已加入自动判别**：检测到通用控制运行时会打出警告，说明结论不可外推。
+
+**同时确认**：D-03 的基线包就在 `Jamie's MacBook Pro` 上（§1.1 的取证目标）。
 
 ### 3.1 探针：`Glint --probe-capslock [秒数]`
 
