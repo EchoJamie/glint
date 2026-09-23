@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# librime 及第三方依赖的构建产物与安装前缀（源码按需固定版本取用，不提交产物）
+deps/build/
+deps/prefix/
+deps/dist/
+vendor/
+
+# 原型与测试用的隔离数据目录；不得提交真实个人词条
+.local/
+*.userdb/
+*.userdb.txt
+
+# 签名材料
+*.p12
+*.mobileprovision
+*.cer
