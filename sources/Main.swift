@@ -31,6 +31,16 @@ struct GlintApp {
         InputSourceInstaller.disable()
       case "--select-input-source":
         InputSourceInstaller.select()
+      case "--probe-icloud":
+        ICloudProbe.run()
+      case "--selftest":
+        // 可选：Glint --selftest [测试数据目录] [--verbose]
+        let rest = Array(CommandLine.arguments.dropFirst(2))
+        let verbose = rest.contains("--verbose")
+        let dir = rest.first { !$0.hasPrefix("--") }
+          ?? (FileManager.default.currentDirectoryPath as NSString)
+               .appendingPathComponent("build/testdata")
+        exit(SelfTest.run(testDataDir: dir, verbose: verbose))
       case "--help", "-h":
         print(helpText)
       default:
@@ -73,6 +83,9 @@ struct GlintApp {
     Glint --enable-input-source    启用输入源
     Glint --disable-input-source   停用输入源
     Glint --select-input-source    切换到本输入源
+    Glint --probe-icloud           iCloud Drive 只读探查（不写入、不读取文件内容）
+    Glint --selftest [目录] [--verbose]
+                                   候选协议离线用例，需隔离的测试数据（make testdata）
     Glint --help                   显示本说明
 
   输入源 ID：\(GlintIds.inputSourceID)

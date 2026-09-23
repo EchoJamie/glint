@@ -52,10 +52,16 @@ fi
 echo "解包到 ${DEST}/…"
 rm -rf "$DEST"
 mkdir -p "$DEST"
-tar -xjf "$CACHE/$ARCHIVE" -C "$DEST"
+# 包内顶层是 dist/ 与 version-info.txt；摊平一层，得到
+# deps/dist/{include,lib,bin,share}，避免出现 deps/dist/dist 这样的路径。
+tmp=$(mktemp -d)
+tar -xjf "$CACHE/$ARCHIVE" -C "$tmp"
+mv "$tmp/dist"/* "$DEST"/
+[[ -f "$tmp/version-info.txt" ]] && mv "$tmp/version-info.txt" "$DEST"/
+rm -rf "$tmp"
 
 echo
 echo "librime 就绪："
 sed 's/^/  /' "$DEST/version-info.txt"
 echo
-ls "$DEST/dist/lib/rime-plugins/" | sed 's/^/  插件：/'
+ls "$DEST/lib/rime-plugins/" | sed 's/^/  插件：/'

@@ -40,8 +40,12 @@ macOS 中文输入法。以 [Rime/librime](https://github.com/rime/librime) 为�
 ```sh
 make deps      # 取固定版本的 librime 1.17.0 到 deps/dist/（校验和核对）
 make build     # 产出 build/Glint.app，不安装
+make selftest  # 候选协议离线用例（自动准备隔离测试数据）
 make install   # 复制到 ~/Library/Input Methods/，须显式执行
 ```
+
+`make deps` 与 `make testdata` 取回或生成的内容都在 `.gitignore` 内，可随时删除重建。
+librime 与三个插件会嵌入 `Contents/Frameworks/`，产物不依赖构建机的路径。
 
 构建与安装是分开的两步，`make build` **不触碰系统**。安装后还需向系统注册输入源：
 
@@ -53,7 +57,10 @@ make install   # 复制到 ~/Library/Input Methods/，须显式执行
 
 只构建 Apple Silicon（arm64），不构建 Intel、不做通用二进制。
 
-> **当前状态**：M0 骨架，**尚不能输入汉字**。librime 依赖已就位但尚未链接，输入控制器对按键一律透传——因此即便启用也不会打断正常打字。见 [TASKS.md](TASKS.md) T0.1。
+> **当前状态**：M0。librime 已接入并嵌入产物，候选协议通过 19/19 离线用例
+> （`make selftest`），但**尚不能输入汉字**——输入控制器对按键一律透传，
+> 这条链路还没接上，因此即便启用也不会打断正常打字。
+> 候选窗口与 Touch Bar 未开始。见 [TASKS.md](TASKS.md)。
 
 首版**只发布源码，不发布二进制**。签名使用免费 Apple Development 证书，仅适用于本机开发与自用；向他人分发二进制需要 `Developer ID Application` 证书（仅付费账号可得）。需要安装包的人自行构建。
 
