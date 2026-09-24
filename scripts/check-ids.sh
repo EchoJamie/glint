@@ -34,7 +34,22 @@ swift() { sed -n "s/.*static let $1 = \"\(.*\)\".*/\1/p" "$SWIFT" | head -1; }
 echo "核对产品标识（docs/decisions.md 5.4）"
 check "bundleID"      "$(plist CFBundleIdentifier)"          "$(swift bundleID)"
 check "inputSourceID" "$(plist 'ComponentInputModeDict:tsVisibleInputModeOrderedArrayKey:0')" "$(swift inputSourceID)"
-check "connectionName" "$(plist InputMethodConnectionName)"  "$(swift connectionName)"
+
+# InputMethodConnectionName 不是随便取的名字，而是**有硬性约定**：
+# 必须是 <bundle identifier>_Connection（macOS 10.7 起的 NSConnection 命名约定）。
+# 因此这里核对的是这个不变量本身，而不是两个文件里的字面量是否一样——
+# decisions.md 5.4 原先定的 Glint_Connection 就不满足它。
+bundle_id=$(plist CFBundleIdentifier)
+connection=$(plist InputMethodConnectionName)
+if [[ "$connection" == "${bundle_id}_Connection" ]]; then
+  # 注意用 ${} 界定变量名：后面紧跟全角括号，bash 会把多字节字符
+  # 当成变量名的一部分，报 "unbound variable"。
+  printf '  ✅ %-24s %s\n' "connectionName" "${connection}（符合 <bundleID>_Connection 约定）"
+else
+  printf '  ❌ %-24s 实际=%s  应为=%s_Connection\n' "connectionName" "$connection" "$bundle_id"
+  echo "     这是 macOS 10.7 起的 NSConnection 硬性约定，不合规会导致输入法加载失败。"
+  fail=1
+fi
 
 # Info.plist 内部的交叉一致性
 declared=$(plist TISInputSourceID)

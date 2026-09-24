@@ -71,7 +71,26 @@ Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlemen
 **同时确认**：本机没有任何第三方 IME 可作对照——TIS 列表里的 11 个
 `TISTypeKeyboardInputMethodModeEnabled` 全部是苹果自家的。
 
-**✅ 结论（2026-09-25，查证后）：需要注销是系统行为，我们没能绕过。**
+**🔴 真相（2026-09-25，查证后）：这是 macOS 26/27 上第三方输入法的一个已知失效。**
+
+症状完全一致的先例：**WeType 2.1.0**（Homebrew cask issue #264600）——
+`Info.plist` 声明正确、签名与公证有效，却在 `AppleEnabledInputSources`、
+`AppleInputSourceHistory`、两个 `Input Methods` 目录里**全都找不到**。
+与我们逐条吻合。
+
+**社区给出的 macOS 27 解决办法**（LINUX DO 帖）：
+
+> 把父来源（`Keyboard Input Method`）和模式（`Input Mode`）**加进
+> `com.apple.HIToolbox` 的 `AppleEnabledInputSources`**，重启 `TextInputMenuAgent`
+> 与输入法进程。操作前备份 `com.apple.HIToolbox.plist`。
+
+也就是说**第三方的自动注册在 macOS 26/27 上坏了**，得手工补登记——
+**问题不在我们的 bundle**。
+
+注销**不一定**能解决（我们已验证一次：注销后仍不出现）。此前那句
+「需要注销是系统行为」只在**普通**情况下成立，对 macOS 26/27 这个失效不适用。
+
+**✅ 此前查证的结论（已被上面取代）：需要注销是系统行为，我们没能绕过。**
 
 Apple 开发者论坛明确说明：在所有近期 macOS 版本上，在
 `<domain>/Library/Input Methods` 新增或修改输入源后，**必须注销重登**，
@@ -517,7 +536,44 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 
 该埋点是临时的：它会在每次按 Shift 等修饰键时都写一条日志，结论拿到后应删除。
 
-### 3.4 与 macOS 自带用法的关系
+### 3.4 IMK 开发指南（2026）里对本项目有直接影响的条目
+
+来源：[macOS Input Method Development Guidelines for 2026](https://github.com/ShikiSuen/ShikiSuen/blob/df1c188261d25346ed51d18b5e7e5aed5962e2b8/TechNotes/macOS_Input_Method_Development_Guidelines_2026/macOS_Input_Method_Development_Guidelines_2026-ENU.md)
+（vChewing 维护者，覆盖 macOS 10.9 – 26）。以下均已落到具体行动。
+
+**已修：`InputMethodConnectionName` 值错了。** 该键**只能**是
+`<bundle identifier>_Connection`（macOS 10.7 起的 NSConnection 约定），
+不合规会导致输入法加载失败。我们原为 `Glint_Connection`（照抄鼠须管），
+已改为 `com.github.echojamie.glint_Connection`。
+`decisions.md` 5.4 里的值需要同步修订——**那是个需要你确认的偏离**。
+源头是 Apple 自己的 NumberInput 示例给了坏榜样；鼠须管也用不合规的名字，
+但它没开沙盒、享有系统宽容，我们不该依赖这个。
+
+**未处理，但影响 T0.3：§9「避免使用 IMKCandidates」。**
+指南称其为「陈年垃圾」，并指出 **macOS 26 内置日文输入法就是它的受害者**——
+玻璃背景全透明、露出白底，候选文字也是白的，几乎看不清。这是苹果自己在
+LiquidGlass 上的适配失当。
+→ T0.3 原本要验证「IMKCandidates 能否承担屏幕窗口」，**现在多了一条要验的：
+在 macOS 27 上的渲染质量**。若不过，直接走 T0.5 的 AppKit 方案。
+
+**未处理，但影响候选窗口设计：§8「macOS 26 起 NSWindow 内存永不回收」。**
+每个 NSWindow 的基线开销在 LiquidGlass 下被放大，且**系统不会回收**。
+指南建议合并窗口、减少数量。`Info.plist` 里加 `UIDesignRequiresCompatibility`
+可把内存降到 macOS 15 水平，但属临时手段，Apple 随时可撤。
+
+**未处理，且我们已违反：§5「IMKInputController 不得持有任何对象」。**
+IMK 在**每次切换输入法**时都会新建 controller 实例；状态应放在以 client 为键的
+会话对象里，controller 只做转发。
+我们目前是：静态共享一个 `RimeEngine` + 一个 session，控制器自己管
+`hasSession`。**快速切换（CapsLock 连按）时新 controller 会 openSession
+掉旧的**——这是真实缺陷，属 M1。
+
+**记录但暂不采纳：§2「始终开启沙盒」。** 指南主张输入法必须开沙盒，视其为
+安全底线。但这与本项目已确认的 **iCloud 同步需求冲突**——沙盒会挡住直接
+读写 `~/Library/Mobile Documents`（decisions.md 3.2 的技术前提）。
+这是一条需要用户决策的取舍，不是纯技术选型。
+
+### 3.5 与 macOS 自带用法的关系
 
 我们在 `Info.plist` 里设了 `TICapsLockLanguageSwitchCapable = true`，
 即**短按 Caps Lock 切换输入源由系统负责**。这与长按是同一枚键上的两种手势，

@@ -27,7 +27,16 @@ enum GlintIds {
   static let bundleID = "com.github.echojamie.glint"
 
   /// Info.plist 的 `InputMethodConnectionName`。
-  static let connectionName = "Glint_Connection"
+  ///
+  /// **必须是 `<bundle identifier>_Connection`**，这是 macOS 10.7 起引入的
+  /// NSConnection 命名约定。不遵循时输入法可能加载失败，报 NSConnection 相关错误。
+  ///
+  /// 注意：`decisions.md` 5.4 原本定为 `Glint_Connection`，那是照着鼠须管抄的——
+  /// 而鼠须管用的 `Squirrel_Connection` **同样不合规**，它没开沙盒，因此一直
+  /// 享有系统的特殊宽容。同一个坏榜样源自 Apple 自己的 NumberInput 示例，
+  /// 据 vChewing 维护者的 2026 年指南，该示例「误导了全世界的输入法开发者」。
+  /// 本项目启用 Hardened Runtime、且不依赖那层宽容，故按约定改正。
+  static let connectionName = bundleID + "_Connection"
 
   /// 输入源的显示名。中文名见 `CFBundleDisplayName` 的本地化。
   static let displayName = "Glint"

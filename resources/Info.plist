@@ -54,8 +54,11 @@
 	<key>TICapsLockLanguageSwitchCapable</key>
 	<true/>
 
+	<!-- 必须是 <bundle identifier>_Connection（macOS 10.7 起的 NSConnection 约定）。
+	     不合规会导致输入法加载失败。decisions.md 5.4 原定的 Glint_Connection
+	     是照抄鼠须管的，而鼠须管同样不合规——它没开沙盒所以享有特殊宽容。 -->
 	<key>InputMethodConnectionName</key>
-	<string>Glint_Connection</string>
+	<string>com.github.echojamie.glint_Connection</string>
 	<key>InputMethodServerControllerClass</key>
 	<string>Glint.GlintInputController</string>
 	<key>InputMethodServerDelegateClass</key>
