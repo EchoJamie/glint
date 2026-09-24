@@ -24,9 +24,24 @@
 | `launchctl kickstart` | ❌ SIP 拦截（Operation not permitted） |
 | `open` 让 launchd 拉起已安装的 app | ✅ 进程起来，但注册仍不生效 |
 
-**结论**：这是预期行为，不是构建缺陷。参考实现鼠须管的 `INSTALL.md` 明确写了
-"**without a logout, the App might not work properly**"，我们遇到的是同一件事。
-系统在登录时才扫描输入法目录并建立输入源列表。
+**⚠️ 结论已修订（2026-09-25）。** 之前把「需要注销」当作 macOS 的固定行为收工，
+是**过早结论**。用户指出：安装鼠须管时并未注销，装完即生效。
+
+查参考实现后找到关键差异：
+
+```
+Squirrel/Makefile:  DSTROOT = /Library/Input Methods
+                    SQUIRREL_APP_ROOT = $(DSTROOT)/Squirrel.app
+postinstall:        sudo -u <登录用户> --register-input-source
+                    sudo -u <登录用户> --enable-input-source
+```
+
+**鼠须管装在系统级 `/Library/Input Methods/`，从未用过用户级路径。**
+而本项目按 [decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 装在
+`~/Library/Input Methods/`。路径不同很可能就是差异所在。
+
+`make install-system` 用于验证（需 sudo）。**结果出来之前，
+「是否需要注销」保持未定，不再当作已确认的事实。**
 
 **重新登录后要做的事**
 
