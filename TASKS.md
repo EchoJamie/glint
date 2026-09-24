@@ -71,12 +71,29 @@ Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlemen
 **同时确认**：本机没有任何第三方 IME 可作对照——TIS 列表里的 11 个
 `TISTypeKeyboardInputMethodModeEnabled` 全部是苹果自家的。
 
-**剩下的可能**：签名身份（鼠须管用付费的 Developer ID Application，我们用免费的
-Apple Development，D-15）；或系统在建登录会话时扫描输入法目录，运行时注册的
-不进入当前会话。
+**✅ 结论（2026-09-25，查证后）：需要注销是系统行为，我们没能绕过。**
 
-**下一步二选一**：注销重登（此时 TCC 已授权，条件齐备）；
-或先装鼠须管做对照，判断「是不是任何第三方 IME 在这台机器上都注册不了」。
+Apple 开发者论坛明确说明：在所有近期 macOS 版本上，在
+`<domain>/Library/Input Methods` 新增或修改输入源后，**必须注销重登**，
+System Settings 与菜单栏输入法菜单才会更新；帖子的提问本身就是
+「有没有办法不注销」，说明**没有官方途径**。
+<https://developer.apple.com/forums/thread/775526>
+
+**鼠须管为什么没有这个问题**：macOS 12+ 起，`TISRegisterInputSource` /
+`TISEnableInputSource` 会提示用户允许启用第三方输入法，而把启用动作放在
+**安装器**里，那个提示才能正常弹出。鼠须管走 `.pkg` 的 postinstall，我们
+从终端运行，提示弹不出来。
+
+**旁证：我们的 bundle 大概率没有问题。** WeType 有过症状完全一致的案例——
+同样声明了 `TISInputSourceID` 与 `InputMethodServerControllerClass`、同样通过
+签名公证，同样在 `AppleEnabledInputSources` 和两个 Input Methods 目录里都找不到。
+<https://github.com/Homebrew/homebrew-cask/issues/264600>
+
+**对产品的含义**：安装流程必须处理这一步。可选做法——像鼠须管一样用安装器
+（能触发系统的「允许启用」提示），或在安装说明里明确要求注销重登。
+首版是「自行构建 + 手动安装」，**至少要把注销这一步写进安装说明**。
+
+**下一步**：注销重登后验证。TCC 权限已授予，条件齐备。
 
 以下是此前的排查记录：
 
