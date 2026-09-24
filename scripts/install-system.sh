@@ -36,16 +36,29 @@ echo
 sudo rm -rf "$DEST/$APP_NAME.app"
 sudo cp -R "$SOURCE" "$DEST/"
 
-echo
-echo "注册输入源（以当前登录用户身份，与鼠须管的做法一致）…"
-"$DEST/$APP_NAME.app/Contents/MacOS/$APP_NAME" --install
+BINARY="$DEST/$APP_NAME.app/Contents/MacOS/$APP_NAME"
+
+probe() {
+  "$BINARY" --list-input-sources glint | grep -q "没有匹配" \
+    && echo "   ❌ 系统仍不认识" \
+    || echo "   ✅ 系统已认识"
+}
 
 echo
-echo "系统是否已认识这个输入源："
-"$DEST/$APP_NAME.app/Contents/MacOS/$APP_NAME" --list-input-sources glint
+echo "──────────────────────────────────────────"
+echo "① 以**登录用户**身份注册（我们此前的做法）"
+"$BINARY" --install | head -1
+probe
 
 echo
-echo "若上面列出了 com.github.echojamie.glint.Hans，说明系统级安装**无需注销即生效**，"
-echo "那就与鼠须管的行为一致，decisions.md 5.4 的安装目录需要重新决定。"
+echo "──────────────────────────────────────────"
+echo "② 以 **root** 身份注册（鼠须管 postinstall 的做法）"
+sudo "$BINARY" --install | head -1
+probe
+
+echo
+echo "──────────────────────────────────────────"
+echo "若②成功而①失败：差异在于注册时的身份，鼠须管的做法要照搬。"
+echo "若两者都失败：位置与身份都不是原因，需要另找；此时注销一次是稳妥的路。"
 echo
 echo "卸载：sudo rm -rf '$DEST/$APP_NAME.app'"
