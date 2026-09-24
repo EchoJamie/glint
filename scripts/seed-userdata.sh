@@ -29,14 +29,14 @@ FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
 
 if [[ ! -d "$SOURCE" ]]; then
-  echo "❌ 找不到 $SOURCE。先执行 make testdata。" >&2
+  echo "❌ 找不到 ${SOURCE}。先执行 make testdata。" >&2
   exit 1
 fi
 
 # 绝不写进 ~/Library/Rime——那是鼠须管的数据，本产品与它完全独立。
 case "$TARGET" in
   "$HOME/Library/Rime"*)
-    echo "❌ 拒绝写入 $TARGET。" >&2
+    echo "❌ 拒绝写入 ${TARGET}。" >&2
     exit 1
     ;;
 esac

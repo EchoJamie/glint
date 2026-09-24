@@ -25,7 +25,7 @@ SOURCE="build/$APP_NAME.app"
 DEST="/Library/Input Methods"
 
 if [[ ! -d "$SOURCE" ]]; then
-  echo "❌ 找不到 $SOURCE。先执行 make build。" >&2
+  echo "❌ 找不到 ${SOURCE}。先执行 make build。" >&2
   exit 1
 fi
 

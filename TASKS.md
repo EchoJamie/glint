@@ -71,7 +71,30 @@ Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlemen
 **同时确认**：本机没有任何第三方 IME 可作对照——TIS 列表里的 11 个
 `TISTypeKeyboardInputMethodModeEnabled` 全部是苹果自家的。
 
-**🔴 真相（2026-09-25，查证后）：这是 macOS 26/27 上第三方输入法的一个已知失效。**
+**✅ 真正的闭环（2026-09-25 最终）**：**是 TCC 权限，而且一直就是它。**
+
+TCC 授权**绑定代码签名（CDHash）**，每次重新签名授权即作废：
+
+```
+03:00:17  auth_value=2  result=true    ← 用户授权后，检查通过
+          ↓ 改 InputMethodConnectionName → 重新签名 → CDHash 变化
+03:30:42  auth_value=0  result=false   ← 授权已失效
+```
+
+**因此前几轮之所以反复，是我自己的重签动作把授权冲掉了**，
+而不是「TCC 之外还有别的原因」。此前那条「TCC 是真实的门但不是完整原因」
+的修正是错的。
+
+**关键操作**（对 macOS Tahoe 上的输入法，社区给出的可靠做法）：
+在「隐私与安全性 → 输入监控」里用**减号移除 Glint、再用加号重新添加**并开启
+——直接勾选不够，陈旧条目要清掉。同样检查「辅助功能」。
+
+**由此得出的工程纪律**：**授权之后不要再重新签名**。任何 `make build` 都会改
+CDHash，把授权作废。调试期间的顺序必须是：先定稿签名、再授权、再验证。
+
+以下是此前（未闭环的）排查记录：
+
+**🔴 疑似：macOS 26/27 对未公证输入法的限制。**
 
 症状完全一致的先例：**WeType 2.1.0**（Homebrew cask issue #264600）——
 `Info.plist` 声明正确、签名与公证有效，却在 `AppleEnabledInputSources`、
