@@ -1,222 +1,151 @@
 # 任务清单
 
 - 日期：2026-09-24
-- 状态：**M0 进行中，已首次安装**。librime 1.17.0 已接入并嵌入产物，
-候选协议（全局索引读取 / 高亮 / 确认）与真实按键路径已通过 **28/28** 离线用例。
-输入控制器已接上引擎（预编辑 + 提交），**但从未在真实输入会话里跑过**——
-首次安装后需要注销重新登录，见 §0。候选窗口与 Touch Bar 未开始。
+- 状态：**M0 进行中。代码侧基本就绪，卡在输入源注册**（见 §0）。
+  librime 1.17.0 已接入并嵌入产物；候选协议与真实按键路径通过 **28/28** 离线用例；
+  输入控制器已接引擎（预编辑 + 提交）。但**从未在真实输入会话里跑过**——
+  一次都没有。候选窗口与 Touch Bar 未开始。
+- 最近一次更新：2026-09-25。文档条理按「当前状态在前、排查经过在后」重排。
+
 - 权威来源：[实施计划](docs/implementation-plan.md)（阶段、依赖、范围、验收、估算）、[功能方案](docs/native-candidate-interaction.md)（候选与 Touch Bar 交互契约）。
 - 本文件是**执行视图**：把阶段拆成可勾选的任务，记录状态、交付物与实际证据。
 - 勾选规则：只勾选**有证据**的任务。写入文件、构建"能编译"、在一台设备上显示成功，都不等于对应验收项已通过（[实施计划 §7](docs/implementation-plan.md#7-验证与试用安排)）。
 
-## 0. 当前阻塞：需要重新登录
+## 0. 当前阻塞：输入源注册不生效
 
-**2026-09-24，首次安装。** 已完成 `make install` 与 `Glint --install`，
-但**系统在当前登录会话里还没有扫描到这个输入源**，需要注销并重新登录。
+**一句话**：TCC 输入监控权限已通（已验证），但注册仍不落成输入源，
+系统**从未尝试加载我们的 bundle**。下一步是「TCC 通过的注册 + 注销重登」这个
+尚未试过的组合。
 
-| 检查项 | 结果 |
+### 0.1 已确证的事实
+
+| 事实 | 证据 |
 | --- | --- |
-| `make install` 复制到 `~/Library/Input Methods/Glint.app` | ✅ |
-| 安装后 `codesign --verify --strict` | ✅ 通过 |
-| `TISRegisterInputSource` 返回值 | ✅ `noErr` |
-| 系统 TIS 列表中是否出现 | ❌ 331 个输入源中无 glint |
-| 重启 `TextInputMenuAgent` / `TextInputSwitcher` / `imklaunchagent` | ❌ 无效 |
-| `launchctl kickstart` | ❌ SIP 拦截（Operation not permitted） |
-| `open` 让 launchd 拉起已安装的 app | ✅ 进程起来，但注册仍不生效 |
+| `TISRegisterInputSource` 内部**同步**查「输入监控」权限 | 同一进程内的 TCC 往返日志 |
+| TCC 判**归责对象**，不是发起进程 | 从 Ghostty 跑 → `auth_value=0`；从 Terminal 跑 → `auth_value=2` |
+| 从 **Terminal.app** 跑，权限检查**已通过** | `03:44:05 auth_value=2 result=true` |
+| 通过后系统**有反应**：`TextInputMenuAgent` 被唤醒并重载偏好 | 同一时刻的日志 |
+| 但**系统从未尝试加载** `/Library|~/Library/Input Methods/Glint.app` | 全时段日志无相关记录 |
+| 本机**无任何第三方 IME** 可作对照 | TIS 的 11 个 `InputMethodModeEnabled` 全是苹果自家 |
 
-**🔍 原因已查明（2026-09-25，有完整日志证据）。**
+### 0.2 已排除（全部实测，不是推理）
 
-`TISRegisterInputSource` 内部会**同步**向 tccd 查一次
-**输入监控（Input Monitoring / kTCCServiceListenEvent）** 权限；被拒则注册不生效。
-同一进程内的完整往返：
+安装位置（用户级/系统级）· 注册身份（登录用户/root）· LaunchServices 登记 ·
+`Info.plist` 键集（**最小包实验**同样不注册，见 `scripts/bisect-bundle.sh`）·
+签名（补齐 entitlements + Hardened Runtime 后仍如此）· 偏好注入
+（写进 `AppleEnabledInputSources` 也不进 TIS 列表——TIS 的清单不从那份偏好建）·
+注销（在 TCC 失败的状态下试过一次，无效，但那次的注册根本没被受理）。
 
-```
-Glint (TCC) TCCAccessRequest() IPC
-Glint SEND: function=TCCAccessRequest, service=kTCCServiceListenEvent
-Glint RECV: { "prompt_type" => 1, "do_not_cache" => true,
-              "auth_value" => 0, "result" => false, "auth_reason" => 4 }
-```
+### 0.3 尚未试过的组合
 
-**关键在归责链**：TCC 把这个请求归责给**发起进程的 responsible process**：
+**TCC 通过的注册 + 注销重登。**
 
-```
-responsible={ identifier=com.mitchellh.ghostty, ... }        ← 我们的终端
-requesting ={ identifier=com.github.echojamie.glint, ... }
-```
-
-从终端运行 `--install`，归责对象就是终端；终端没有输入监控权限，请求被拒，
-而且弹窗也是弹给终端的。**因此「从终端注册」这条路永远走不通**，与我们的
-bundle 无关。
-
-**这解释了鼠须管为什么没有这个问题**：它是 `.pkg` 的 postinstall 发起注册，
-不经过终端。同理，**登录时输入法由系统直接拉起，归责链也不经过终端**。
-
-**已排除的原因**（每一项都实测过，不是推测）：安装位置（用户级/系统级）、
-注册身份（登录用户/ root）、LaunchServices 登记、`Info.plist` 结构（与解包后的
-Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlements 后仍然如此）。
-
-**⚠️ 因果链不完整（2026-09-25 更新）**：用户给 Glint 授予输入监控、并以终端身份
-重跑注册后，日志显示 TCC **已经通过**：
-
-```
-03:00:17  auth_value => 2, result => true      ← 已授予
-```
-
-**但输入源依然不出现在 TIS 列表里。** 重启 `TextInputMenuAgent` /
-`TextInputSwitcher` / `imklaunchagent` 也无效。
-
-因此 **TCC 是一道真实的门（此前确实被它挡住），但不是全部**——过了它之后还有
-尚未查明的一环。此前把它当成完整原因，是把「已排除的障碍」误当成「唯一原因」。
-
-**同时确认**：本机没有任何第三方 IME 可作对照——TIS 列表里的 11 个
-`TISTypeKeyboardInputMethodModeEnabled` 全部是苹果自家的。
-
-**✅ 真正的闭环（2026-09-25 最终）**：**是 TCC 权限，而且一直就是它。**
-
-TCC 授权**绑定代码签名（CDHash）**，每次重新签名授权即作废：
-
-```
-03:00:17  auth_value=2  result=true    ← 用户授权后，检查通过
-          ↓ 改 InputMethodConnectionName → 重新签名 → CDHash 变化
-03:30:42  auth_value=0  result=false   ← 授权已失效
-```
-
-**因此前几轮之所以反复，是我自己的重签动作把授权冲掉了**，
-而不是「TCC 之外还有别的原因」。此前那条「TCC 是真实的门但不是完整原因」
-的修正是错的。
-
-**关键操作**（对 macOS Tahoe 上的输入法，社区给出的可靠做法）：
-在「隐私与安全性 → 输入监控」里用**减号移除 Glint、再用加号重新添加**并开启
-——直接勾选不够，陈旧条目要清掉。同样检查「辅助功能」。
-
-**由此得出的工程纪律**：**授权之后不要再重新签名**。任何 `make build` 都会改
-CDHash，把授权作废。调试期间的顺序必须是：先定稿签名、再授权、再验证。
-
-以下是此前（未闭环的）排查记录：
-
-**🔴 疑似：macOS 26/27 对未公证输入法的限制。**
-
-症状完全一致的先例：**WeType 2.1.0**（Homebrew cask issue #264600）——
-`Info.plist` 声明正确、签名与公证有效，却在 `AppleEnabledInputSources`、
-`AppleInputSourceHistory`、两个 `Input Methods` 目录里**全都找不到**。
-与我们逐条吻合。
-
-**社区给出的 macOS 27 解决办法**（LINUX DO 帖）：
-
-> 把父来源（`Keyboard Input Method`）和模式（`Input Mode`）**加进
-> `com.apple.HIToolbox` 的 `AppleEnabledInputSources`**，重启 `TextInputMenuAgent`
-> 与输入法进程。操作前备份 `com.apple.HIToolbox.plist`。
-
-也就是说**第三方的自动注册在 macOS 26/27 上坏了**，得手工补登记——
-**问题不在我们的 bundle**。
-
-注销**不一定**能解决（我们已验证一次：注销后仍不出现）。此前那句
-「需要注销是系统行为」只在**普通**情况下成立，对 macOS 26/27 这个失效不适用。
-
-**✅ 此前查证的结论（已被上面取代）：需要注销是系统行为，我们没能绕过。**
-
-Apple 开发者论坛明确说明：在所有近期 macOS 版本上，在
-`<domain>/Library/Input Methods` 新增或修改输入源后，**必须注销重登**，
-System Settings 与菜单栏输入法菜单才会更新；帖子的提问本身就是
-「有没有办法不注销」，说明**没有官方途径**。
-<https://developer.apple.com/forums/thread/775526>
-
-**鼠须管为什么没有这个问题**：macOS 12+ 起，`TISRegisterInputSource` /
-`TISEnableInputSource` 会提示用户允许启用第三方输入法，而把启用动作放在
-**安装器**里，那个提示才能正常弹出。鼠须管走 `.pkg` 的 postinstall，我们
-从终端运行，提示弹不出来。
-
-**旁证：我们的 bundle 大概率没有问题。** WeType 有过症状完全一致的案例——
-同样声明了 `TISInputSourceID` 与 `InputMethodServerControllerClass`、同样通过
-签名公证，同样在 `AppleEnabledInputSources` 和两个 Input Methods 目录里都找不到。
-<https://github.com/Homebrew/homebrew-cask/issues/264600>
-
-**对产品的含义**：安装流程必须处理这一步。可选做法——像鼠须管一样用安装器
-（能触发系统的「允许启用」提示），或在安装说明里明确要求注销重登。
-首版是「自行构建 + 手动安装」，**至少要把注销这一步写进安装说明**。
-
-**下一步**：注销重登后验证。TCC 权限已授予，条件齐备。
-
-以下是此前的排查记录：
-
-**已实测确认归责链是症结（此结论现已被上面推翻）**：给 **Glint 本身**授予输入监控后，从终端注册**仍然被拒**——
-TCC 判的是 responsible process：
-
-```
-responsible = com.mitchellh.ghostty      ← 终端
-accessing   = com.github.echojamie.glint
-```
-
-也就是说，从终端注册这条路，**给谁授权都没用，除非给终端授权**。
-
-**可行的两条路**：
-1. 给终端（Ghostty）授予「输入监控」——开发期绕道，代价是终端拿到一个很宽的权限；
-2. **注销重新登录**——归责链变成系统直接拉起输入法。这是产品实际会走的流程。
-
-**产品事实（需写进安装说明）**：`TISRegisterInputSource` 硬性检查输入监控权限，
-因此**安装 Glint 需要用户授予该权限**，不是把 app 拷过去就行。
-
-**与 decisions.md 里那条的区别**：decisions.md 3 写「尚未决定引入全局键盘监听」，
-那说的是**我们自己**装监听器；这里说的是**系统要求输入法本身**具备该权限。
-两件事必须分开记，不要合并成一条。
-
-**附带发现**：我们的签名此前**没有 Hardened Runtime、也没有任何 entitlements**，
-而鼠须管两者皆有。已补齐 `resources/Glint.entitlements`
-（`disable-library-validation` + `app-sandbox=false`）并开启 Hardened Runtime——
-前者本来就必需，因为打进包的 librime 是 adhoc 签名。
-
-**排查过程中的一个陷阱**：`log` 是 **zsh 的内建命令**（列出登录用户），
-直接写 `log show ...` 不会报错但什么都不执行。此前几次「日志查询无结果」
-因此全是假的，白绕了几轮。查询系统日志要用 `/usr/bin/log`。
-
-以下是此前的修订记录：
-
-**⚠️ 结论已修订（2026-09-25）。** 之前把「需要注销」当作 macOS 的固定行为收工，
-是**过早结论**。用户指出：安装鼠须管时并未注销，装完即生效。
-
-查参考实现后找到关键差异：
-
-```
-Squirrel/Makefile:  DSTROOT = /Library/Input Methods
-                    SQUIRREL_APP_ROOT = $(DSTROOT)/Squirrel.app
-postinstall:        sudo -u <登录用户> --register-input-source
-                    sudo -u <登录用户> --enable-input-source
-```
-
-**鼠须管装在系统级 `/Library/Input Methods/`，从未用过用户级路径。**
-而本项目按 [decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 装在
-`~/Library/Input Methods/`。路径不同很可能就是差异所在。
-
-`make install-system` 用于验证（需 sudo）。**结果出来之前，
-「是否需要注销」保持未定，不再当作已确认的事实。**
-
-**重新登录后要做的事**
+之前那次注销是在 TCC 一直失败时做的，注册根本没被受理，注销自然无用。
+现在从 Terminal 跑已经能通过权限检查，这个组合值得走一遍：
 
 ```sh
-G="$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint"
-"$G" --list-input-sources glint     # 应列出 com.github.echojamie.glint.Hans
-"$G" --enable-input-source          # 启用
+# ① 在 Terminal.app 里（不是 Ghostty）
+"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --install
+
+# ② 自己确认这次 TCC 是通过的（要看到 auth_value => 2）
+/usr/bin/log show --last 1m --style compact --info --debug \
+  --predicate 'process == "Glint"' | grep -A4 ListenEvent | grep auth_value
+
+# ③ 注销、重新登录
+
+# ④ 回来查
+"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --list-input-sources glint
 ```
 
-然后切换到「流光」输入源，在文本编辑器里输入 `nihao`。**预期**：出现下划线预编辑
-文本，空格或数字键上屏候选。这条链路已经接好并离线验证过（`make selftest`），
-但**从未在真实输入会话里跑过**——本机第一次。
+诊断脚本：`scripts/diagnose-registration.sh`（会识别当前终端并列出相关授权）。
 
-观察诊断输出：`scripts/run-dev.sh`（优先运行已安装副本并收集 stderr）。
+### 0.4 若上述仍失败：最后一个有分量的假设
 
-**数据已就位**：`~/Library/Glint` 已用 rime-ice 播种并可正常部署
-（`--selftest ~/Library/Glint` 通过 28/28）。这是**开发手段**，不是产品的首次部署
-方式——随包附带方案数据属 M1，且方案版本尚未固定，见 §1.1。移除：`rm -rf ~/Library/Glint`。
+**macOS 26/27 对未公证输入法施加了更强限制。**
+依据：[WindInput](https://github.com/huanfeng/WindInput) 的 macOS 构建文档明写
+「macOS 26 (Tahoe) 对未公证输入法限制更强」。
 
-**若登录后仍未出现**，下一步试系统级安装（需 sudo，且位置与
-[decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 定的用户级目录不同，
-属需要一并确认的偏离）：参考实现鼠须管装的是 `/Library/Input Methods/Squirrel.app`，
-并注明需要 sudo。用户级目录理论上受支持（该目录本就存在且带 `.localized`），
-但本机未能验证。
+而本项目按 [D-15](docs/decisions.md#2-已确定的方向) 使用**免费 Apple Development
+证书**，**技术上无法公证**。若这条成立，问题就不是「怎么调」而是
+「这条路在这台机器上是否成立」——**会影响 D-14（平台范围）与 D-15（证书）**，
+需要用户决策，不是技术选型。
 
-**当前系统状态**：已安装、未注册生效、**未改动任何现有输入源设置**。
-系统偏好里仍只有原来的 ABC，`AppleEnabledInputSources` 中没有 glint。
-回退方式：`make uninstall`。
+### 0.5 两条待确认的决策偏离
+
+均由本次排查产生，**已实施但未获用户确认**：
+
+1. **`InputMethodConnectionName` 改名**（[decisions.md 5.4](docs/decisions.md#54-项目标识版权与签名) 原定 `Glint_Connection`）
+   → 改为 `com.github.echojamie.glint_Connection`。
+   依据：vChewing 维护者的 2026 IMK 指南指出该键**只能是
+   `<bundle identifier>_Connection`**（macOS 10.7 起的 NSConnection 约定），
+   不合规会导致输入法加载失败。原值是照抄鼠须管的，而鼠须管同样不合规——
+   它没开沙盒所以享有系统宽容。
+2. **`AppleEnabledInputSources` 被注入两条**（未起作用）
+   → 保留还是还原由用户定：
+   `python3 scripts/register-input-source-workaround.py --revert`
+
+### 0.6 可以在 MacBook Pro 上做的事
+
+用户已决定改在 MBP（装有鼠须管、接实体键盘、非通用控制注入）上处理。
+那边有两件事：
+
+**① 验证注册（可能根本不需要费这些周折）**
+MBP 上鼠须管能正常工作，说明它的 macOS 版本没有 macOS 26/27 的那些限制。
+把仓库拷过去直接 `make build && make install && --install` 试，可能一次就成。
+
+**② 导出现有的 Rime 基线（D-03，长期挂着的一项）**
+
+```sh
+cd ~/Library/Rime
+tar --exclude=build --exclude='*.userdb' -czf ~/Desktop/rime-baseline.tar.gz .
+```
+
+排除 `build/` 与 `*.userdb/`，只取方案与配置（几百 KB）。**个人学习词条不进这个包**，
+那是 M4 的事。拿到后可以：
+- 反查实际使用的 rime-ice 版本（本机克隆的是今天 main，不是用户在用的那份）
+- 取得用户改过的 `*.custom.yaml`
+
+这一步做完，「固定体验基线」才可能勾选（[§1.1](#11-参考仓库与方案数据2026-09-24-已就位)）。
+
+### 0.7 完整排查经过（时间倒序，保留供追溯）
+
+1. **最初**：`make install` + `--install` → `TISRegisterInputSource` 返回
+   `noErr`，但 TIS 331 个输入源中无 glint。重启三个代理、`launchctl kickstart`
+   （被 SIP 拦）、`open` 拉起 app，均无效。
+2. **怀疑位置**：查参考实现，发现鼠须管装的是系统级 `/Library/Input Methods/`
+   （`DSTROOT`），而本项目按 5.4 装用户级。改用系统级 → 仍不生效。
+   期间发现并修掉一个真 bug：`--install` 注册的是**写死的**用户级路径，
+   从系统级副本运行也注册用户级那份（见提交 46518d5）。
+3. **怀疑身份**：对比 root 与登录用户注册（鼠须管 postinstall 是 root 注册、
+   降权启用）→ 两者都失败。
+4. **怀疑 plist**：解包鼠须管 1.1.2 的 `.pkg`，逐键比对 `ComponentInputModeDict`
+   → 结构完全一致。
+5. **怀疑签名**：补 `entitlements`（`disable-library-validation` +
+   `app-sandbox=false`）并开 Hardened Runtime（此前两者皆无，
+   而 `disable-library-validation` 本来就是加载 adhoc 签名的 librime 所必需）
+   → librime 仍正常，注册仍失败。
+6. **找到 TCC**：日志显示 `TISRegisterInputSource` 同步查
+   `kTCCServiceListenEvent`，且归责给 `responsible process`。
+7. **一度误判**：用户给 Glint 授权后检查仍失败，我据此写下「TCC 是真实的门但
+   不是完整原因」——**这个修正是错的**。真实原因是**我又重新签名了**
+   （改连接名），TCC 授权绑定 CDHash，旧的授权随之作废。
+8. **用户质疑「鼠须管装的时候也没注销」**，推动查参考实现与网上资料，
+   否掉了「需要注销是固定行为」这个抄来的结论。
+9. **改用查证**：搜索确认 macOS 26/27 上第三方输入法自动注册存在失效
+   （WeType 有逐条吻合的先例），社区办法是手工注入 `AppleEnabledInputSources`
+   ——**实测对我们无效**，TIS 的清单不从那份偏好建。
+10. **对照实验**：`scripts/bisect-bundle.sh` 最小包也不注册 → 不是 plist 键集问题。
+11. **闭环**：从 Terminal.app 跑，TCC 通过（`auth_value=2`），系统有反应
+    （`TextInputMenuAgent` 唤醒）但仍不落成输入源，且系统从未尝试加载 bundle。
+
+### 0.8 排查过程中踩到的坑（值得记住）
+
+- **`log` 是 zsh 的内建命令**（列登录用户）。`log show ...` 不报错但什么都不执行，
+  此前几次「日志查询无结果」全是假的。查系统日志要用 `/usr/bin/log`。
+- **TCC 授权绑定代码签名（CDHash）**。授权后**不要再重新签名**——任何
+  `make build` 都会作废授权。调试顺序必须是：先定稿签名、再授权、再验证。
+- **TCC 判归责对象，不是发起进程**。从终端跑的注册，判的是那个终端有什么权限。
+- **TCC 库只有 Ghostty 读得了**（它有完全磁盘访问）；Terminal.app 读不了。
 
 ## 1. 环境前置核对（2026-09-24 实测）
 
@@ -420,6 +349,18 @@ C 层的存在理由是两条：把 librime 的函数指针表与手工内存管
 ---
 
 ### [ ] T0.3 公共候选窗口
+
+> **⚠️ 开工前先看这条。** [IMK 开发指南（2026）§9](https://github.com/ShikiSuen/ShikiSuen/blob/df1c188261d25346ed51d18b5e7e5aed5962e2b8/TechNotes/macOS_Input_Method_Development_Guidelines_2026/macOS_Input_Method_Development_Guidelines_2026-ENU.md)
+> 标题就是**「避免使用 IMKCandidates」**，称其为「陈年垃圾」，并指出
+> **macOS 26 内置的日文输入法就是它的受害者**——玻璃背景全透明、露出白底，
+> 候选文字也是白的，几乎看不清。这是 Apple 自己在 LiquidGlass 上的适配失当。
+>
+> **所以 T0.3 的验收条件要增加一项：macOS 27 上的渲染质量。**
+> 这一项预期大概率不过，届时直接走 T0.5 的 AppKit 方案，不算意外。
+> 但**仍要实测**——我们需要自己的证据，不能拿别人的结论当验收。
+>
+> 另：§8 指出 **macOS 26 起 NSWindow 占用的内存永不回收**，候选窗口数量要克制。
+> `Info.plist` 加 `UIDesignRequiresCompatibility` 可降到 macOS 15 水平，属临时手段。
 
 **具体工作**：用同一组长短候选，在真实 Rime 会话上核对公开 `IMKCandidates` 能否承担屏幕窗口。逐项记录成功/失败，不预设结论。
 
@@ -630,4 +571,5 @@ IMK 在**每次切换输入法**时都会新建 controller 实例；状态应放
 | 版本 | 日期 | 变更 |
 | --- | --- | --- |
 | 0.1 | 2026-09-24 | 建立任务清单：完成环境前置核对（发现本机无触控栏、无鼠须管与 `~/Library/Rime` 基线），把 M0 拆为 T0.1–T0.5 可勾选任务并记录交付物与阻塞，M1–M5 记为概要。仓库已初始化，尚无代码。 |
-| 0.2 | 2026-09-24 | 工程骨架、librime 接入、候选协议与真实按键路径完成（离线用例 28/28）；首次安装并记录「需注销重新登录」；新增 §3 长按 Caps Lock 探针与已核实的访问权限。 |
+| 0.2 | 2026-09-24 | 工程骨架、librime 接入、候选协议与真实按键路径完成（离线用例 28/28）；首次安装；新增 §3 长按 Caps Lock 探针与已核实的访问权限。 |
+| 0.3 | 2026-09-25 | §0 按「当前状态在前、排查经过在后」重排：确证 TCC 归责链、列清已排除项与未试组合、记录两条待确认的决策偏离；新增 §0.6「在 MBP 上要做的事」；T0.3 补入 IMKCandidates 的实测预警。 |
