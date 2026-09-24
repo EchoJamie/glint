@@ -38,10 +38,20 @@ enum InputSourceInstaller {
   /// 前提是 `Glint.app` 已经位于 `~/Library/Input Methods/`——系统只认安装目录下的副本，
   /// 直接注册构建产物不会生效。安装与构建因此是分开的两步（`make install`）。
   static func register() {
-    let appURL = GlintIds.installedAppURL
-    guard FileManager.default.fileExists(atPath: appURL.path) else {
-      report("未在 \(appURL.path) 找到 Glint.app。先执行 make install。")
+    // 注册**自己所在的 bundle**，而不是写死的安装路径。
+    //
+    // 之前这里用的是 GlintIds.installedAppURL（硬编码 ~/Library/Input Methods/），
+    // 于是从系统级副本运行时注册的仍是用户级那份——测试因此无效，
+    // 而且真实的安装位置永远无法生效。
+    let appURL = Bundle.main.bundleURL
+    guard appURL.pathExtension == "app" else {
+      report("当前可执行文件不在 .app 包内（\(appURL.path)），无法注册。")
+      report("   请从已安装的副本运行，例如 make install 之后。")
       exit(1)
+    }
+    if appURL.path.contains("/build/") {
+      report("⚠️  正在注册构建目录中的产物：\(appURL.path)")
+      report("   系统通常不会接受构建目录里的输入法，请先安装。")
     }
     // 返回值必须看：注册失败时系统不报错也不提示，只体现在这个 OSStatus 上。
     let status = TISRegisterInputSource(appURL as CFURL)
@@ -129,9 +139,9 @@ enum InputSourceInstaller {
     if let filter, matched == 0 {
       report("没有匹配「\(filter)」的输入源。")
       report("注册未生效的常见原因：")
-      report("  1. 应用不在 ~/Library/Input Methods/ 下时，TISRegisterInputSource 不会生效")
-      report("  2. 注册与生效之间常需注销并重新登录")
-      report("  3. 签名无效时系统会静默拒绝")
+      report("  1. 签名无效时系统会静默拒绝（先跑 codesign --verify --strict）")
+      report("  2. 应用不在系统认可的输入法目录下：/Library/Input Methods/ 或 ~/Library/Input Methods/")
+      report("  3. 部分安装位置需要注销并重新登录后系统才扫描到")
     } else if filter == nil {
       report("（未筛选，以上为全部）")
     }
