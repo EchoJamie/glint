@@ -55,9 +55,26 @@ bundle 无关。
 注册身份（登录用户/ root）、LaunchServices 登记、`Info.plist` 结构（与解包后的
 Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlements 后仍然如此）。
 
-**验证方式**（二选一）：
-1. 给终端（Ghostty）授予「输入监控」，再从终端注册；
-2. 注销重新登录，由系统拉起输入法。
+**已实测确认归责链是症结**：给 **Glint 本身**授予输入监控后，从终端注册**仍然被拒**——
+TCC 判的是 responsible process：
+
+```
+responsible = com.mitchellh.ghostty      ← 终端
+accessing   = com.github.echojamie.glint
+```
+
+也就是说，从终端注册这条路，**给谁授权都没用，除非给终端授权**。
+
+**可行的两条路**：
+1. 给终端（Ghostty）授予「输入监控」——开发期绕道，代价是终端拿到一个很宽的权限；
+2. **注销重新登录**——归责链变成系统直接拉起输入法。这是产品实际会走的流程。
+
+**产品事实（需写进安装说明）**：`TISRegisterInputSource` 硬性检查输入监控权限，
+因此**安装 Glint 需要用户授予该权限**，不是把 app 拷过去就行。
+
+**与 decisions.md 里那条的区别**：decisions.md 3 写「尚未决定引入全局键盘监听」，
+那说的是**我们自己**装监听器；这里说的是**系统要求输入法本身**具备该权限。
+两件事必须分开记，不要合并成一条。
 
 **附带发现**：我们的签名此前**没有 Hardened Runtime、也没有任何 entitlements**，
 而鼠须管两者皆有。已补齐 `resources/Glint.entitlements`
