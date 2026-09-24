@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  与参考实现鼠须管的对比（2026-09-25）：
+	    Squirrel: disable-library-validation + network.client + app-sandbox=false
+	              CodeDirectory flags = 0x10000 (runtime，即 Hardened Runtime)
+	    Glint（修正前）: 无任何 entitlement，flags = 0x0
+	  TISRegisterInputSource 返回 noErr 却始终不生效，怀疑与此有关。
+
+	  disable-library-validation **本来就是必需的**：Hardened Runtime 会拒绝
+	  加载不是同一团队签名的 dylib，而打进包里的 librime 与三个插件都是
+	  adhoc 签名（见 scripts/fetch-librime.sh）。此前没暴露，只是因为
+	  压根没开 Hardened Runtime，也就没有这条限制。
+	-->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<!-- 输入法不能沙盒化：它要读写 ~/Library/Glint，也可能读写 iCloud Drive
+	     普通文件夹（decisions.md 3.2）。参考实现同样显式声明 false。 -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!--
+	  刻意**不加** com.apple.security.network.client：鼠须管加它是为了 Sparkle
+	  自动更新，而本项目首版不引入更新服务（实施计划 §8），不该申请用不到的权限。
+	-->
+</dict>
+</plist>

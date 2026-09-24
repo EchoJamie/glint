@@ -20,6 +20,9 @@ LOCALIZATION := resources/zh-Hans.lproj
 # 输入源菜单图标（透明底矢量）与 app 图标（.icns）
 ICON         := resources/glint.pdf
 APP_ICON     := resources/GlintIcon.icns
+# 签名用 entitlements。开启 Hardened Runtime 的前提，也是加载
+# adhoc 签名的 librime 所必需的，见文件内说明。
+ENTITLEMENTS := resources/Glint.entitlements
 
 SWIFT_SOURCES := $(wildcard $(SOURCES_DIR)/*.swift)
 C_SOURCES     := $(wildcard $(RIME_DIR)/*.c)
@@ -95,7 +98,7 @@ $(BUILD_DIR)/%.o: $(RIME_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CLANG) $(C_FLAGS) -c $< -o $@
 
-$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY) $(ICON) $(APP_ICON) LICENSE THIRD_PARTY.md $(wildcard licenses/*.txt)
+$(APP_BUNDLE): $(SWIFT_SOURCES) $(C_SOURCES) $(RESOURCES) $(LOCALIZATION)/InfoPlist.strings $(DEPS_READY) $(ICON) $(APP_ICON) $(ENTITLEMENTS) LICENSE THIRD_PARTY.md $(wildcard licenses/*.txt)
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources $(FRAMEWORKS)/rime-plugins
 	@$(MAKE) --no-print-directory $(C_OBJECTS)
@@ -138,8 +141,10 @@ sign:
 	for lib in $(FRAMEWORKS)/*.dylib $(FRAMEWORKS)/rime-plugins/*.dylib; do \
 		[ -f "$$lib" ] && codesign --force --sign "$$IDENT" --timestamp=none "$$lib" >/dev/null 2>&1; \
 	done; \
-	codesign --force --sign "$$IDENT" --timestamp=none $(APP_BUNDLE); \
-	echo "已签名：$$IDENT"
+	codesign --force --options runtime \
+		--entitlements $(ENTITLEMENTS) \
+		--sign "$$IDENT" --timestamp=none $(APP_BUNDLE); \
+	echo "已签名：$$IDENT（Hardened Runtime + entitlements）"
 
 # ------------------------------------------------------------------ 测试数据
 

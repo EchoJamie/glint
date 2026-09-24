@@ -24,17 +24,45 @@
 | `launchctl kickstart` | ❌ SIP 拦截（Operation not permitted） |
 | `open` 让 launchd 拉起已安装的 app | ✅ 进程起来，但注册仍不生效 |
 
-**🔍 找到原因了（2026-09-25）。** `TISRegisterInputSource` 调用时系统会查
-**输入监控（Input Monitoring / kTCCServiceListenEvent）** 权限；未授予时
-注册被**静默丢弃**。系统日志：
+**🔍 原因已查明（2026-09-25，有完整日志证据）。**
+
+`TISRegisterInputSource` 内部会**同步**向 tccd 查一次
+**输入监控（Input Monitoring / kTCCServiceListenEvent）** 权限；被拒则注册不生效。
+同一进程内的完整往返：
 
 ```
-REQUEST: sender_pid=97067, function=TCCAccessRequest
-AUTHREQ_CTX: service=kTCCServiceListenEvent, preflight=yes
-AUTHREQ_RESULT: authValue=0, authReason=4        ← 0 = 未授予
+Glint (TCC) TCCAccessRequest() IPC
+Glint SEND: function=TCCAccessRequest, service=kTCCServiceListenEvent
+Glint RECV: { "prompt_type" => 1, "do_not_cache" => true,
+              "auth_value" => 0, "result" => false, "auth_reason" => 4 }
 ```
 
-合理：输入法能读到全部按键，所以 macOS 把「注册为输入法」卡在按键监听权限之后。
+**关键在归责链**：TCC 把这个请求归责给**发起进程的 responsible process**：
+
+```
+responsible={ identifier=com.mitchellh.ghostty, ... }        ← 我们的终端
+requesting ={ identifier=com.github.echojamie.glint, ... }
+```
+
+从终端运行 `--install`，归责对象就是终端；终端没有输入监控权限，请求被拒，
+而且弹窗也是弹给终端的。**因此「从终端注册」这条路永远走不通**，与我们的
+bundle 无关。
+
+**这解释了鼠须管为什么没有这个问题**：它是 `.pkg` 的 postinstall 发起注册，
+不经过终端。同理，**登录时输入法由系统直接拉起，归责链也不经过终端**。
+
+**已排除的原因**（每一项都实测过，不是推测）：安装位置（用户级/系统级）、
+注册身份（登录用户/ root）、LaunchServices 登记、`Info.plist` 结构（与解包后的
+Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlements 后仍然如此）。
+
+**验证方式**（二选一）：
+1. 给终端（Ghostty）授予「输入监控」，再从终端注册；
+2. 注销重新登录，由系统拉起输入法。
+
+**附带发现**：我们的签名此前**没有 Hardened Runtime、也没有任何 entitlements**，
+而鼠须管两者皆有。已补齐 `resources/Glint.entitlements`
+（`disable-library-validation` + `app-sandbox=false`）并开启 Hardened Runtime——
+前者本来就必需，因为打进包的 librime 是 adhoc 签名。
 
 **排查过程中的一个陷阱**：`log` 是 **zsh 的内建命令**（列出登录用户），
 直接写 `log show ...` 不会报错但什么都不执行。此前几次「日志查询无结果」
