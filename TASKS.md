@@ -24,6 +24,24 @@
 | `launchctl kickstart` | ❌ SIP 拦截（Operation not permitted） |
 | `open` 让 launchd 拉起已安装的 app | ✅ 进程起来，但注册仍不生效 |
 
+**🔍 找到原因了（2026-09-25）。** `TISRegisterInputSource` 调用时系统会查
+**输入监控（Input Monitoring / kTCCServiceListenEvent）** 权限；未授予时
+注册被**静默丢弃**。系统日志：
+
+```
+REQUEST: sender_pid=97067, function=TCCAccessRequest
+AUTHREQ_CTX: service=kTCCServiceListenEvent, preflight=yes
+AUTHREQ_RESULT: authValue=0, authReason=4        ← 0 = 未授予
+```
+
+合理：输入法能读到全部按键，所以 macOS 把「注册为输入法」卡在按键监听权限之后。
+
+**排查过程中的一个陷阱**：`log` 是 **zsh 的内建命令**（列出登录用户），
+直接写 `log show ...` 不会报错但什么都不执行。此前几次「日志查询无结果」
+因此全是假的，白绕了几轮。查询系统日志要用 `/usr/bin/log`。
+
+以下是此前的修订记录：
+
 **⚠️ 结论已修订（2026-09-25）。** 之前把「需要注销」当作 macOS 的固定行为收工，
 是**过早结论**。用户指出：安装鼠须管时并未注销，装完即生效。
 
