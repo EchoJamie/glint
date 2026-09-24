@@ -10,6 +10,7 @@
 
 import AppKit
 import ApplicationServices
+import Carbon
 import CoreGraphics
 
 /// Caps Lock 长按可行性的实机探针。
@@ -77,14 +78,38 @@ enum CapsLockProbe {
       .contains { !$0.isTerminated }
 
     print("输入路径：")
-    print("  通用控制（Universal Control）: \(universalControl ? "**运行中**" : "未运行")")
+    print("  通用控制（Universal Control）: \(universalControl ? "运行中" : "未运行")")
     if universalControl {
-      print("")
-      print("  ⚠️  通用控制正在运行。若你的键鼠接在另一台设备上，按键是远程注入的。")
-      print("      结论只反映**远程输入这条路径**，不代表本地键盘的行为——")
-      print("      远程输入可能不转发 Caps Lock 这类本地翻转键。")
-      print("      要得到产品实际会遇到的结论，请在**接键盘的那台机器**上跑同一个探针。")
+      print("      （仅当键鼠接在另一台设备上时才影响结论；本机有键盘则无影响）")
     }
+
+    // 当前输入源是本探针**最关键的变量**。
+    // 输入法通过 recognizedEvents 声明要接收的事件，IMK 会先路由给它；
+    // 输入法返回已处理后，事件就不再送到前台应用。鼠须管就声明了
+    // .keyDown | .flagsChanged 并且对多数情况返回 handled=true——
+    // 也就是说，**输入法正在时，普通 app 根本看不到 flagsChanged**。
+    print("  当前输入源: \(currentInputSourceDescription())")
+  }
+
+  /// 当前生效的输入源及其类型。
+  private static func currentInputSourceDescription() -> String {
+    guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+      return "(取不到)"
+    }
+    func text(_ key: CFString) -> String? {
+      guard let raw = TISGetInputSourceProperty(source, key) else { return nil }
+      return unsafeBitCast(raw, to: CFString?.self) as String?
+    }
+    let id = text(kTISPropertyInputSourceID) ?? "?"
+    let type = text(kTISPropertyInputSourceType) ?? "?"
+    // TIS 的类型串。用字面量比较，避免依赖具体 SDK 版本导出了哪个常量。
+    // TISTypeKeyboardLayout 是普通键盘布局；其余（InputMode / InputMethod*）
+    // 都意味着有输入法在链路里。
+    let isPlainKeyboardLayout = type == "TISTypeKeyboardLayout"
+    let verdict = isPlainKeyboardLayout
+      ? "普通键盘布局 —— 事件应直达前台应用；看不到就是别的原因"
+      : "**有输入法在链路里** —— 它可能已消费 flagsChanged，本探针看不到属预期"
+    return "\(id)  类型=\(type)\n      → \(verdict)"
   }
 
   private static func canCreateEventTap() -> Bool {
@@ -103,9 +128,13 @@ private final class CapsLockMonitor {
   private struct Sample {
     let at: TimeInterval
     let source: String
+    let kind: String
     let keyCode: UInt16
     let capsLockOn: Bool
     let flagsRaw: UInt64
+
+    var isCapsLock: Bool { keyCode == CapsLockProbe.capsLockKeyCode }
+    var isKeyboard: Bool { kind == "flagsChanged" || kind == "keyDown" }
   }
 
   private var samples: [Sample] = []
@@ -120,7 +149,15 @@ private final class CapsLockMonitor {
 
   func install() {
     // 本地监听：应用在前台时能收到发给自己的事件。
-    if let token = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown],
+    //
+    // 同时监听鼠标——这是**分层实验的关键对照**。鼠标点击不经过输入法，
+    // 若鼠标事件能到而键盘事件不能，就精确指向「输入法消费了键盘事件」；
+    // 若两者都不到，则是窗口/焦点问题，与输入法无关。
+    // 只用点击，不用 mouseMoved——后者每移动一像素就一条，会把输出刷爆。
+    let localMask: NSEvent.EventTypeMask = [
+      .flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown,
+    ]
+    if let token = NSEvent.addLocalMonitorForEvents(matching: localMask,
                                                     handler: { [weak self] event in
       self?.record(event, source: "本地")
       return event
@@ -247,28 +284,43 @@ private final class CapsLockMonitor {
 
   private func instructions(seconds: TimeInterval) -> String {
     """
-    请先点一下下方输入框（确保焦点在窗口里），然后依次做三件事：
+    请依次做四件事，每步之间隔一秒以上：
 
-      ① 敲一个普通字母，比如 a     ← 对照：它出现而 Caps Lock 不出现，才是真结论
-      ② 短按一次 Caps Lock（快按快放）
-      ③ 长按一次 Caps Lock（按住约 1 秒再松开）
+      ① 在窗口内点一下鼠标      ← 最底层对照：应用到底有没有在收事件
+      ② 敲一个普通字母，比如 a  ← 键盘事件有没有到达应用
+      ③ 短按一次 Caps Lock
+      ④ 长按一次 Caps Lock（按住约 1 秒再松开）
 
-    每步之间隔一秒以上。窗口标题栏会显示已收到的事件数，
-    变了就说明事件到了——不必等结束。
+    窗口标题栏实时显示已收到的事件数，变了说明事件到了，不必等结束。
+
+    某一步「前一层到了、后一层没到」，问题就精确落在那一层，不用猜。
 
     探针只记录事件，不改动任何设置。
     """
   }
 
   private func record(_ event: NSEvent, source: String) {
-    // 记录**所有**修饰键变化与普通按键，不只是 Caps Lock。
-    // 普通字母是最关键的对照：它出现、Caps Lock 不出现，才是「Caps Lock 不走
-    // flagsChanged」这个真结论；两者都不出现，则是焦点或通道问题，结论无效。
-    guard event.type == .flagsChanged || event.type == .keyDown else { return }
+    // 记录修饰键、普通按键与鼠标。三者构成分层对照：
+    //   鼠标到了 → 应用确实在收事件
+    //   字母到了 → 键盘事件能到达应用
+    //   Caps Lock 到了 → 才能回答长按能否测得
+    // 缺哪一层，问题就定位在哪一层，不必猜。
+    guard event.type == .flagsChanged || event.type == .keyDown
+       || event.type == .leftMouseDown || event.type == .rightMouseDown else { return }
 
     let caps = event.modifierFlags.contains(.capsLock)
+    let kind: String
+    switch event.type {
+    case .flagsChanged: kind = "flagsChanged"
+    case .keyDown: kind = "keyDown"
+    case .leftMouseDown: kind = "鼠标左键"
+    case .rightMouseDown: kind = "鼠标右键"
+    default: return
+    }
+
     let sample = Sample(at: Date().timeIntervalSince(start),
                         source: source,
+                        kind: kind,
                         keyCode: event.keyCode,
                         capsLockOn: caps,
                         flagsRaw: UInt64(bitPattern: Int64(event.modifierFlags.rawValue)))
@@ -277,11 +329,12 @@ private final class CapsLockMonitor {
     // 不必等到 20 秒结束才知道白按了。
     window?.title = "Glint — Caps Lock 探针（已收到 \(samples.count) 条事件）"
 
-    let isCaps = event.keyCode == CapsLockProbe.capsLockKeyCode
-    let kind = event.type == .flagsChanged ? "flagsChanged" : "keyDown     "
-    print(String(format: "  [%6.3fs] %@ %@ keyCode=%d%@ capsLock=%@ flags=0x%llx",
-                 sample.at, source, kind, Int(event.keyCode),
-                 isCaps ? "(Caps Lock)" : "", caps ? "开" : "关", sample.flagsRaw))
+    let detail = sample.isKeyboard
+      ? String(format: " keyCode=%d%@ capsLock=%@ flags=0x%llx",
+               Int(event.keyCode), sample.isCapsLock ? "(Caps Lock)" : "",
+               caps ? "开" : "关", sample.flagsRaw)
+      : ""
+    print(String(format: "  [%6.3fs] %@ %-12@%@", sample.at, source, kind as NSString, detail))
 
     // 同时读一次会话级状态：它反映的是**整个会话**的真实锁定状态，
     // 而 NSEvent.modifierFlags 只反映本进程收到的事件流。两者是否一致本身就值得看。
@@ -295,22 +348,33 @@ private final class CapsLockMonitor {
   /// 把 Caps Lock 状态翻转点提取出来——**翻转点就是按下**。
   /// 若序列里只有翻转点、没有别的，说明松开没有独立事件。
   func report() {
-    let flips = samples.filter { $0.keyCode == CapsLockProbe.capsLockKeyCode }
-    let others = samples.filter { $0.keyCode != CapsLockProbe.capsLockKeyCode }
+    // 分层统计：鼠标 / 键盘 / Caps Lock。
+    // 从下往上逐层排除，缺哪一层问题就在哪一层，不必猜。
+    let mouse = samples.filter { !$0.isKeyboard }
+    let keyboard = samples.filter(\.isKeyboard)
+    let flips = samples.filter(\.isCapsLock)
 
-    print("收到事件共 \(samples.count) 条：Caps Lock \(flips.count) 条，其他 \(others.count) 条")
+    print("收到事件共 \(samples.count) 条")
+    print("  鼠标:      \(mouse.count) 条")
+    print("  键盘:      \(keyboard.count) 条（其中 Caps Lock \(flips.count) 条）")
     print("报告时系统认定的前台应用：\(Self.frontmostApplicationName())")
+    print("")
 
     guard !flips.isEmpty else {
-      print("")
-      if others.isEmpty {
-        print("❌ **一条事件都没收到**——采集通道或焦点的问题，不是 Caps Lock 的结论。")
-        print("   自检能收到 in-process 投递的事件，说明监视器本身没问题，")
-        print("   问题在于硬件事件没有路由到本进程。最可能是窗口在系统层面没有真正前台。")
-        print("   请把上面「系统认定的前台应用」一行贴回来——它会直接指出焦点在谁那里。")
+      print("── 判定 ──")
+      if mouse.isEmpty && keyboard.isEmpty {
+        print("❌ 连**鼠标点击**都没收到——应用根本没在接收事件，与 Caps Lock 无关。")
+        print("   自检能收到 in-process 事件，说明监视器本身没问题。")
+        print("   请确认按键时探针窗口确实在前台（点一下窗口再操作）。")
+      } else if keyboard.isEmpty {
+        print("❌ 鼠标事件到了，**键盘事件一条都没有**。")
+        print("   这说明键盘事件在到达本应用之前就被截走了。")
+        print("   最可能是当前输入法消费了它们——见上方「当前输入源」一行。")
+        print("   这条结论本身有价值：**输入法在位时，普通应用看不到键盘事件；")
+        print("   而输入法自己能看到** —— Glint 将来正是输入法，这一点对我们有利。")
       } else {
-        print("⚠️  收到了其他事件（通道是通的），但**没有 Caps Lock 事件**。")
-        print("   这本身就是结论：Caps Lock 没有走 flagsChanged 通道，或它的状态未变化。")
+        print("⚠️  键盘事件到了，但没有 Caps Lock 事件。")
+        print("   这是真结论：Caps Lock 没有以 flagsChanged 形式送达，或状态未变化。")
       }
       return
     }

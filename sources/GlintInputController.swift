@@ -67,7 +67,27 @@ final class GlintInputController: IMKInputController {
 
   // MARK: - 按键
 
+  /// 声明本控制器要接收哪些事件。
+  ///
+  /// `flagsChanged` 是关键：它是输入法**唯一**能观察到修饰键（含 Caps Lock）的通道，
+  /// 而 `keyDown` 里看不到 Caps Lock。参考鼠须管同样声明了这两类。
+  ///
+  /// 这与「长按 Caps Lock」的可行性直接相关：普通应用走 NSEvent 监听收不到
+  /// Caps Lock 事件（实测），而输入法经 IMK 路由可以——所以这个能力
+  /// **只有输入法自己才测得准**，见 TASKS.md §3。
+  override func recognizedEvents(_ sender: Any!) -> Int {
+    Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged]).rawValue)
+  }
+
   override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
+    // 修饰键变化**只记录、不消费**：交回系统，由
+    // TICapsLockLanguageSwitchCapable 负责既定的短按切换行为（D-07）。
+    // 这里先把事件形态摸清楚，再决定长按要不要接管。
+    if event.type == .flagsChanged {
+      recordModifierEvent(event)
+      return false
+    }
+
     guard hasSession, event.type == .keyDown else { return false }
 
     // Command 组合键一律不碰，否则会吞掉复制、粘贴、切换输入源等系统快捷键。
@@ -94,6 +114,42 @@ final class GlintInputController: IMKInputController {
 
   override func inputText(_ string: String!, client sender: Any!) -> Bool {
     false
+  }
+
+  // MARK: - 修饰键事件记录（临时诊断，见 TASKS.md §3）
+
+  private static var lastModifierAt: TimeInterval?
+  private static var lastCapsLockState: Bool?
+
+  /// 记录修饰键事件，用来回答「长按 Caps Lock 能否测得」。
+  ///
+  /// 要区分短按与长按，必须同时拿到**按下**与**松开**两个时刻。Caps Lock 是翻转键，
+  /// 松开不改状态——所以关键是看松开那一刻有没有独立事件。这里的 Δ 时间戳
+  /// 就是判据：若一次按键只产生一条「状态翻转」记录、没有紧随的第二条，
+  /// 则长按无从测量。
+  ///
+  /// **这是临时诊断代码。** 结论拿到后应删除或降为可选日志——
+  /// 它会在每次按 Shift 等修饰键时都写一条，不适合长期保留。
+  private func recordModifierEvent(_ event: NSEvent) {
+    let now = ProcessInfo.processInfo.systemUptime
+    let caps = event.modifierFlags.contains(.capsLock)
+    // 会话级状态来自系统，反映**整个会话**的真实锁定状态；
+    // NSEvent 只反映本进程收到的事件流，二者不一致时以上者为准。
+    let sessionCaps = CGEventSource.flagsState(.combinedSessionState)
+      .contains(.maskAlphaShift)
+
+    var line = String(format: "modifier keyCode=%d capsLock=%@ session=%@",
+                      Int(event.keyCode), caps ? "开" : "关", sessionCaps ? "开" : "关")
+    if let last = Self.lastModifierAt {
+      line += String(format: " Δ%.0fms", (now - last) * 1000)
+    }
+    if let previous = Self.lastCapsLockState, previous != caps {
+      line += "  ← Caps Lock 翻转"
+    }
+    Self.lastModifierAt = now
+    Self.lastCapsLockState = caps
+
+    log(line)
   }
 
   // MARK: - 与客户端同步
