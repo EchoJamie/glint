@@ -55,7 +55,32 @@ bundle 无关。
 注册身份（登录用户/ root）、LaunchServices 登记、`Info.plist` 结构（与解包后的
 Squirrel 逐键比对）、签名方式（补上 Hardened Runtime 与 entitlements 后仍然如此）。
 
-**已实测确认归责链是症结**：给 **Glint 本身**授予输入监控后，从终端注册**仍然被拒**——
+**⚠️ 因果链不完整（2026-09-25 更新）**：用户给 Glint 授予输入监控、并以终端身份
+重跑注册后，日志显示 TCC **已经通过**：
+
+```
+03:00:17  auth_value => 2, result => true      ← 已授予
+```
+
+**但输入源依然不出现在 TIS 列表里。** 重启 `TextInputMenuAgent` /
+`TextInputSwitcher` / `imklaunchagent` 也无效。
+
+因此 **TCC 是一道真实的门（此前确实被它挡住），但不是全部**——过了它之后还有
+尚未查明的一环。此前把它当成完整原因，是把「已排除的障碍」误当成「唯一原因」。
+
+**同时确认**：本机没有任何第三方 IME 可作对照——TIS 列表里的 11 个
+`TISTypeKeyboardInputMethodModeEnabled` 全部是苹果自家的。
+
+**剩下的可能**：签名身份（鼠须管用付费的 Developer ID Application，我们用免费的
+Apple Development，D-15）；或系统在建登录会话时扫描输入法目录，运行时注册的
+不进入当前会话。
+
+**下一步二选一**：注销重登（此时 TCC 已授权，条件齐备）；
+或先装鼠须管做对照，判断「是不是任何第三方 IME 在这台机器上都注册不了」。
+
+以下是此前的排查记录：
+
+**已实测确认归责链是症结（此结论现已被上面推翻）**：给 **Glint 本身**授予输入监控后，从终端注册**仍然被拒**——
 TCC 判的是 responsible process：
 
 ```
