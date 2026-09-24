@@ -63,7 +63,7 @@ CODESIGN_ID  ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
                   | sed -n 's/.*"\(Apple Development:.*\)"/\1/p' | head -1)
 
 .DEFAULT_GOAL := build
-.PHONY: all build sign icons embed-deps embed-licenses seed-userdata install uninstall clean distclean check-ids deps testdata selftest help
+.PHONY: all build sign icons embed-deps embed-licenses seed-userdata install install-system uninstall clean distclean check-ids deps testdata selftest help
 
 all: build
 
@@ -75,7 +75,8 @@ help:
 	@echo "make selftest  跑候选协议离线用例"
 	@echo "make seed-userdata  把测试数据放进 ~/Library/Glint（开发用）"
 	@echo "make check-ids 核对 Info.plist 与 GlintIds.swift 的标识一致"
-	@echo "make install   安装到 $(INSTALL_DIR)（需显式执行，构建不会自动安装）"
+	@echo "make install   用户级安装到 $(INSTALL_DIR)（需显式执行）"
+	@echo "make install-system  系统级安装到 /Library/Input Methods/（需 sudo）"
 	@echo "make uninstall 从 $(INSTALL_DIR) 移除，不动个人数据目录"
 	@echo "make clean     清理构建产物（保留已下载的依赖）"
 
@@ -160,6 +161,11 @@ install: build
 	@cp -R $(APP_BUNDLE) "$(INSTALL_DIR)/$(APP_NAME).app"
 	@echo "已安装到 $(INSTALL_DIR)/$(APP_NAME).app"
 	@echo "下一步：$(INSTALL_DIR)/$(APP_NAME).app/Contents/MacOS/$(APP_NAME) --install"
+
+# 系统级安装到 /Library/Input Methods/（需 sudo）。用于验证「是否因为装在
+# 用户级目录才需要注销」——参考实现鼠须管用的是系统级路径。见 TASKS.md §0。
+install-system: build
+	@bash scripts/install-system.sh
 
 # 只移除程序，不删除 ~/Library/Glint 下的个人数据（decisions.md §8）
 uninstall:
