@@ -3,14 +3,11 @@
 # 生成输入源菜单图标（矢量 PDF）。
 #
 # macOS 输入源菜单要求小尺寸仍可辨认，因此用 PDF 矢量而不是位图——
-# 这与鼠须管用 rime.pdf 的做法一致（decisions.md 5.4）。
+# 这与鼠须管用 rime.pdf 的做法一致。
 #
 # 意象是「一道流光」，与 Glint（一闪而过的光）对应。
 #
-# **这是 M0 占位版本**，正式图标在 M1 前交付。app 图标走 Asset Catalog，
-# 与本脚本无关。
-#
-# 直接手写 PDF，不依赖任何图形库——构建环境不该为一张占位图多出依赖。
+# 直接生成 PDF 与 ICNS；矢量 PDF 不依赖额外图形库。
 #
 # Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>
 # This file is part of Glint, licensed under GPLv3 or later. See LICENSE.

@@ -6,6 +6,7 @@
 
 # Xcode
 build/
+dist/
 DerivedData/
 xcuserdata/
 *.xcuserstate
@@ -25,9 +26,11 @@ deps/build/
 deps/prefix/
 deps/dist/
 deps/cache/
+deps/downloads/
+deps/yaml/
 vendor/
 
-# 原型与测试用的隔离数据目录；不得提交真实个人词条
+# 本地隔离数据目录；不得提交真实个人词条
 .local/
 *.userdb/
 *.userdb.txt

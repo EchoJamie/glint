@@ -1,0 +1,13 @@
+/* 英文本地化。见 zh-Hans.lproj/InfoPlist.strings 里关于「输入源显示名
+   必须按输入源 ID 逐条定义」的说明——那份注释是这条约定的主记录。
+
+   英文侧照鼠须管的写法保留语言后缀，中文侧则只写产品名。 */
+
+CFBundleDisplayName = "Glint";
+CFBundleName = "Glint";
+
+/* 父项（容器，不可选） */
+"com.github.echojamie.inputmethod.Glint" = "Glint";
+
+/* 简体模式（可切换的那一项） */
+"com.github.echojamie.inputmethod.Glint.Hans" = "Glint - Simplified";

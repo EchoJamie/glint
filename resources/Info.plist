@@ -3,23 +3,22 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  标识取值见 docs/decisions.md 5.4 节。
-	  此处与 sources/GlintIds.swift 必须一致，`make check-ids` 会核对。
+	  产品标识见 sources/App/GlintIds.swift。
+	  此处与 sources/App/GlintIds.swift 必须一致，`make check-ids` 会核对。
 	  输入源 ID 一旦变更，系统内已注册的输入源会失效。
 	-->
 	<key>TISInputSourceID</key>
-	<string>com.github.echojamie.glint</string>
+	<string>com.github.echojamie.inputmethod.Glint</string>
 
 	<key>CFBundleIdentifier</key>
-	<string>com.github.echojamie.glint</string>
+	<string>com.github.echojamie.inputmethod.Glint</string>
 	<key>CFBundleExecutable</key>
 	<string>Glint</string>
 	<key>CFBundleName</key>
 	<string>Glint</string>
 	<key>CFBundleDisplayName</key>
 	<string>Glint</string>
-	<!-- Finder / 关于本机等处显示的图标。M0 占位版，
-	     由 scripts/make-icons.py 生成；正式图标在 M1 前交付。 -->
+	<!-- Finder / 关于本机等处显示的图标，由 scripts/make-icons.py 生成。 -->
 	<key>CFBundleIconFile</key>
 	<string>GlintIcon</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -39,6 +38,12 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>0.1.0</string>
+	<!-- 声明本包支持的平台。Xcode 构建时会自动写入，手写 Makefile 需显式声明；
+	     参考实现鼠须管同样有此键。 -->
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 
@@ -50,34 +55,36 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 
-	<!-- Caps Lock 保留既定的「原始拼音上屏后切换中英文」行为 -->
+	<!-- 允许系统用中/英键或 Caps Lock 在 Glint 与拉丁输入源间切换 -->
 	<key>TICapsLockLanguageSwitchCapable</key>
 	<true/>
 
-	<!-- 必须是 <bundle identifier>_Connection（macOS 10.7 起的 NSConnection 约定）。
-	     不合规会导致输入法加载失败。decisions.md 5.4 原定的 Glint_Connection
-	     是照抄鼠须管的，而鼠须管同样不合规——它没开沙盒所以享有特殊宽容。 -->
+	<!-- IMK 服务连接名。连接名不变，避免改变已注册服务的身份。 -->
 	<key>InputMethodConnectionName</key>
-	<string>com.github.echojamie.glint_Connection</string>
+	<string>com.github.echojamie.inputmethod.Glint_Connection</string>
 	<key>InputMethodServerControllerClass</key>
 	<string>Glint.GlintInputController</string>
 	<key>InputMethodServerDelegateClass</key>
 	<string>Glint.GlintInputController</string>
 
+	<!-- macOS 26.6.2 的 IMKServer 从此项决定是否向宿主发布 Touch Bar 候选。
+	     缺省关闭；仅 updateCandidates 不会启用该通路。协议边界见 docs/troubleshooting.md。 -->
+	<key>SendsTouchBarCandidatesToApp</key>
+	<true/>
+
 	<!--
 	  只做简体，不做繁体。输入源 ID 仍保留 .Hans 后缀：
-	  日后若要加繁体，保留后缀意味着不必改 ID（见 decisions.md 5.4）。
-	  图标为 **M0 占位版**（resources/glint.pdf，由 scripts/make-icons.py 生成）。
-	  正式图标在 M1 前交付；app 图标走 Asset Catalog，尚未产出。
+	  简体模式保留 .Hans 后缀，未来增加其他模式时无需更改已有 ID。
+	  图标由 scripts/make-icons.py 生成。
 	-->
 	<key>ComponentInputModeDict</key>
 	<dict>
 		<key>tsInputModeListKey</key>
 		<dict>
-			<key>com.github.echojamie.glint.Hans</key>
+			<key>com.github.echojamie.inputmethod.Glint.Hans</key>
 			<dict>
 				<key>TISInputSourceID</key>
-				<string>com.github.echojamie.glint.Hans</string>
+				<string>com.github.echojamie.inputmethod.Glint.Hans</string>
 				<key>TISIntendedLanguage</key>
 				<string>zh-Hans</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
@@ -104,7 +111,7 @@
 		</dict>
 		<key>tsVisibleInputModeOrderedArrayKey</key>
 		<array>
-			<string>com.github.echojamie.glint.Hans</string>
+			<string>com.github.echojamie.inputmethod.Glint.Hans</string>
 		</array>
 	</dict>
 </dict>

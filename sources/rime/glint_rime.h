@@ -25,7 +25,7 @@
 ///    rime_*.h，会话用不透明的 int64_t 表示，因此 Swift 的桥接头只需要这一个
 ///    文件，Swift 侧完全看不到 RimeApi、RIME_STRUCT_INIT 这些东西。
 ///
-/// 依据：[功能方案 §6.2/6.4](../../docs/native-candidate-interaction.md) 约定
+/// 依据：[输入行为](../../docs/input-behavior.md) 约定
 /// 用 `candidate_list_from_index` 读全局索引、`highlight_candidate` 移动高亮、
 /// `select_candidate` 确认，且**只由 Rime 决定候选顺序与提交结果**。
 
@@ -91,7 +91,8 @@ int glint_rime_process_key(int64_t session, int keycode, int mask);
 const char *glint_rime_get_input(int64_t session);
 
 /// 预编辑文本（已转换部分 + 剩余编码）。写入 out，返回写入字节数，-1 表示失败。
-int glint_rime_get_preedit(int64_t session, char *out, size_t out_len);
+int glint_rime_get_preedit(int64_t session, char *out, size_t out_len, int *cursor);
+size_t glint_rime_caret_pos(int64_t session);
 
 /// 取出**并消费**引擎的提交结果。
 ///
@@ -118,6 +119,30 @@ int glint_rime_highlight(int64_t session, int64_t index);
 
 /// 确认某个全局索引的候选。返回 1 表示成功。
 int glint_rime_select(int64_t session, int64_t index);
+
+/// 当前方案与已编译方案字段。字符串写入 out，失败返回 -1。
+int glint_rime_validate_yaml(const char *text);
+int glint_rime_yaml_value(const char *text, const char *key, char *out, size_t capacity);
+int glint_rime_yaml_list(const char *text, const char *key, char *out, size_t capacity);
+int glint_rime_schema_id(int64_t session, char *out, size_t capacity);
+int glint_rime_schema_value(const char *schema, const char *key, char *out, size_t capacity);
+int glint_rime_get_option(int64_t session, const char *name);
+/// 仅改变当前会话，不保存用户配置。
+void glint_rime_set_option(int64_t session, const char *name, int enabled);
+/// 使用 Rime 自己的 user.yaml 保存开关；调用方只允许受支持的选项。
+int glint_rime_save_option(const char *name, int enabled);
+
+/// YAML 转 JSON，供配置补丁合并使用。返回字符串由 free 释放。
+char *glint_yaml_json(const char *text);
+int glint_rime_select_schema(int64_t session, const char *schema);
+
+/// 维护时必须先关闭全部 session。实际合并、快照与文本转换由 Rime levers 执行。
+int glint_rime_user_dict_names(char *out, size_t capacity);
+int glint_rime_backup_dict(const char *name);
+int glint_rime_restore_dict(const char *file);
+int glint_rime_export_dict(const char *name, const char *file);
+int glint_rime_import_dict(const char *name, const char *file);
+int glint_rime_user_sync_dir(char *out, size_t capacity);
 
 /// 取消当前组合，不删除已上屏文字。
 void glint_rime_clear_composition(int64_t session);

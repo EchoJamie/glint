@@ -1,72 +1,46 @@
 # 流光 / Glint
 
-macOS 中文输入法。以 [Rime/librime](https://github.com/rime/librime) 为引擎，候选体验参照 macOS 原生简体拼音，提供连续滚动的**卷轴候选**、原生风格 **Touch Bar** 候选、可视化设置与词库管理。
+流光是面向 Apple Silicon Mac 的简体中文输入法，使用 [Rime/librime](https://github.com/rime/librime) 处理拼音、候选和学习。屏幕提供卷轴候选；配有 Touch Bar 的 Mac 可显示同一轮中文候选和手动下一词联想。英文继续使用 macOS 的 ABC 输入源。
 
-- 第一目标：作者本人在 Mac 上长期使用。
-- 第二目标：公开在 GitHub，允许他人获取、使用、修改和分享。无商业化计划，也不额外设置用途限制。
-- 当前状态：**尚未开始开发**。需求、功能方案与实施计划已形成，即将进入 M0 技术原型。
+当前版本 **0.1.0**。正式项目交付物是 `dist/Glint-0.1.0-arm64.dmg`，`build/Glint.app` 仅为构建中间件。Apple Developer ID 与公证按本次交付约定暂缓；这份 Apple Development 签名包不能宣称已通过 Gatekeeper 站外分发认证。最低 macOS 13.0 只是编译目标，尚未跨版本验收。
 
-## 文档
+## 安装与使用
 
-| 文档 | 内容 |
-| --- | --- |
-| [docs/decisions.md](docs/decisions.md) | 决策记录：目标与使用背景、已确定方向（D-01–D-15）、职责边界、许可证与未决事项。 |
-| [docs/native-candidate-interaction.md](docs/native-candidate-interaction.md) | 卷轴候选与 Touch Bar 的功能与交互方案：窗口状态、排布、按键、Rime 接入与验收清单。 |
-| [docs/implementation-plan.md](docs/implementation-plan.md) | 实施计划：M0–M5 阶段、依赖关系、首版范围、验收条件与投入估算。 |
-| [TASKS.md](TASKS.md) | 任务清单。实施计划的执行视图，记录当前阶段可勾选项、状态与证据。 |
-| [THIRD_PARTY.md](THIRD_PARTY.md) | 第三方组件、固定提交号与许可证登记；许可证正文在 [licenses/](licenses/)。 |
+先完成正在输入的文字，再打开 DMG 中的「安装流光.app」并点击安装。更新时安装器会暂时切换为英文，正常退出旧版后再替换程序。首次安装可点击「打开键盘设置」，在「文本输入 → 编辑…」中添加「流光」；已经添加过的用户，完成后从菜单栏选择「流光」即可。安装保留 `~/Library/Glint` 中的设置、词库和已下载方案。安装、升级与卸载现状见[交付与运维](docs/release.md)。
 
-上述文档中的**技术组织、设置清单、格式范围和工期属于执行默认值**，不等同于已经逐项确认的需求；需求以 decisions.md 与 native-candidate-interaction.md 为准。
+在输入法菜单打开「流光设置…」：
 
-## 项目标识
+- **输入方案**：内置雾凇全拼及七种双拼；万象 Base 按需从官方源下载，含简体模型约 455 MB，安装后可本地切换。方案和键位不从 `~/Library/Rime` 读取。
+- **候选外观**：字体、12–36 pt 字号、系统／浅色／深色与单行／展开预览。
+- **词库与学习**：个人快照与文本导入导出、雾凇专业词库、从鼠须管目录选择性迁移。
+- **iCloud 同步**：默认关闭，只处理个人学习数据及可选用户补丁，不同步成品方案和模型；两台 Mac 的传播与收敛按本次要求未验收。
+- **关于与诊断**：查看版本、数据目录和限量文件日志。
 
-| 字段 | 值 |
-| --- | --- |
-| 中文名 | 流光 |
-| 英文名 / Executable | `Glint` |
-| CFBundleIdentifier | `com.github.echojamie.glint` |
-| 输入源 ID | `com.github.echojamie.glint.Hans` |
-| InputMethodConnectionName | `Glint_Connection` |
-| InputMethodServerControllerClass | `Glint.GlintInputController` |
-| 安装目录 | `~/Library/Input Methods/Glint.app` |
-| 用户数据目录 | `~/Library/Glint`（与 `~/Library/Rime` 同构，完全独立、不共享） |
-| 起始版本号 | `0.1.0` |
+Touch Bar 联想仅接受手动触摸，键盘不选联想词；没有 Touch Bar 时跳过联想，普通中文输入仍可用。按键、候选和上屏规则见[输入行为](docs/input-behavior.md)。
 
-只做简体输入源。平台范围锁定 **Apple Silicon（arm64）**，不构建 Intel、不做通用二进制；最低 macOS 版本待 M0/M1 实测后记录。
+## 从源码构建
 
-## 构建与安装
-
-需要 Xcode 与 `make`。Xcode 已安装时无需 `sudo xcode-select`——`Makefile` 通过 `DEVELOPER_DIR` 直接使用它。
+需要 Xcode、`make` 和项目约定的 Apple Development 签名证书。构建不会自动安装或修改日用词库。
 
 ```sh
-make deps      # 取固定版本的 librime 1.17.0 到 deps/dist/（校验和核对）
-make build     # 产出 build/Glint.app，不安装
-make selftest  # 候选协议离线用例（自动准备隔离测试数据）
-make install   # 复制到 ~/Library/Input Methods/，须显式执行
+make deps          # 获取固定版本的 librime
+make bundle-rime   # 准备内置方案资源
+make               # 生成 dist/Glint-0.1.0-arm64.dmg 和 SHA256SUMS
 ```
 
-`make deps` 与 `make testdata` 取回或生成的内容都在 `.gitignore` 内，可随时删除重建。
-librime 与三个插件会嵌入 `Contents/Frameworks/`，产物不依赖构建机的路径。
+源码按职责放在 `sources/App`、`Input`、`Engine`、`Candidates`、`Schemes`、`Data`、`Sync`、`Settings`；C 桥接位于 `sources/rime`。安装器在 `installer/`，构建脚本在 `scripts/`。历史诊断探针和 `make check` 已从发布仓库移除；本次没有新增测试代码。
 
-构建与安装是分开的两步，`make build` **不触碰系统**。安装后还需向系统注册输入源：
+## 维护文档
 
-```sh
-"$HOME/Library/Input Methods/Glint.app/Contents/MacOS/Glint" --install
-```
+每份文档对应一个长期用途：
 
-`make uninstall` 只移除程序，不删除 `~/Library/Glint` 下的个人数据——卸载程序与删除个人数据是两件事。
+| 文档 | 保留理由 |
+| --- | --- |
+| [架构与目录](docs/architecture.md) | 定位代码、运行时及跨模块修改边界。 |
+| [输入行为](docs/input-behavior.md) | 明确键盘、屏幕候选与 Touch Bar 的产品规则。 |
+| [用户数据与同步](docs/data-and-sync.md) | 保护学习库、配置和同步事务的完整性。 |
+| [交付与运维](docs/release.md) | 复现 DMG、安装、诊断并理解尚未完成的验收。 |
+| [排障与踩坑](docs/troubleshooting.md) | 保留已查明的根因、判据和修复原则，避免重复调查。 |
+| [第三方与许可证](THIRD_PARTY.md) | 追溯随包组件、来源、版权与授权条件。 |
 
-只构建 Apple Silicon（arm64），不构建 Intel、不做通用二进制。
-
-> **当前状态**：M0。librime 已接入并嵌入产物，候选协议通过 19/19 离线用例
-> （`make selftest`），但**尚不能输入汉字**——输入控制器对按键一律透传，
-> 这条链路还没接上，因此即便启用也不会打断正常打字。
-> 候选窗口与 Touch Bar 未开始。见 [TASKS.md](TASKS.md)。
-
-首版**只发布源码，不发布二进制**。签名使用免费 Apple Development 证书，仅适用于本机开发与自用；向他人分发二进制需要 `Developer ID Application` 证书（仅付费账号可得）。需要安装包的人自行构建。
-
-## 许可证
-
-本项目按 [GPLv3](LICENSE) 发布：`Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>`。
-
-复用的第三方组件保留其原有许可证与署名，来源与许可见 [docs/decisions.md 第 5 节](docs/decisions.md)。librime 为 BSD-3-Clause，Squirrel 为 GPLv3。
+项目采用 [GPLv3](LICENSE)。个人数据不进入仓库或源码归档。

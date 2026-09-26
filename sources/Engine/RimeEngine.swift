@@ -1,12 +1,5 @@
-//
-//  RimeEngine.swift
-//  Glint
-//
-//  Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>
-//
-//  This file is part of Glint, licensed under the GNU General Public License
-//  version 3 or later. See LICENSE in the project root.
-//
+// Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
 
@@ -14,14 +7,14 @@ import Foundation
 ///
 /// 只做三件事：管会话、按全局索引读候选、把选择交给引擎。
 /// **不重排候选、不自己判断组句、不缓存学习数据**——顺序与结果一律由 Rime 决定
-/// （docs/decisions.md 候选界面实现约束）。
+/// （候选与输入的职责见 docs/architecture.md）。
 final class RimeEngine {
   /// 一个候选。
   ///
   /// `index` 是**全局候选索引**，不是当前页或当前行的序号。
-  /// 身份由 `(index, text, comment)` 三者共同确定：文本相同的两个候选
-  /// 仍然是不同的候选，任何选择都不通过字符串反查索引
-  /// （功能方案 §5 第 6、7 条）。
+  /// 身份由所属会话、候选代次与 `index` 确定：文本相同的两个候选
+  /// 仍然是不同的候选。引擎只接受索引；系统 Touch Bar 只回文字时，
+  /// 桥接层会拒绝重名歧义，协议缺口记录在 docs/troubleshooting.md。
   struct Candidate: Equatable {
     let index: Int
     let text: String
@@ -41,7 +34,7 @@ final class RimeEngine {
   }
 
   private var session: Int64 = 0
-  private var started = false
+  private(set) var started = false
 
   /// 一次读取的候选上限。功能方案 §6.2 建议首批 32 项作为起点，
   /// 实际以测量调整。
@@ -53,7 +46,7 @@ final class RimeEngine {
   func start(appName: String, userDataDir: String, sharedDataDir: String?, logDir: String?) {
     guard !started else { return }
     let shared = sharedDataDir ?? userDataDir
-    _ = appName.withCString { app in
+    let status = appName.withCString { app in
       userDataDir.withCString { user in
         shared.withCString { shared in
           (logDir ?? "").withCString { log in
@@ -62,7 +55,7 @@ final class RimeEngine {
         }
       }
     }
-    started = true
+    started = status == 0
   }
 
   /// 阻塞到部署完成。
@@ -86,9 +79,11 @@ final class RimeEngine {
 
   // MARK: - 会话
 
-  func openSession() {
+  func openSession(allowPrediction: Bool = true) {
     closeSession()
     session = glint_rime_create_session()
+    // 只限制当前输入会话，不改方案配置或同步过来的用户偏好。
+    if !allowPrediction { glint_rime_set_option(session, "prediction", 0) }
   }
 
   func closeSession() {
@@ -99,6 +94,28 @@ final class RimeEngine {
 
   /// 会话是否仍然有效。旧会话的迟到事件据此丢弃，不能兜底选择首项。
   var isAlive: Bool { session != 0 && glint_rime_session_alive(session) == 1 }
+
+  var schemaID: String? {
+    guard isAlive else { return nil }
+    var value = [CChar](repeating: 0, count: 512)
+    guard glint_rime_schema_id(session, &value, value.count) == 0 else { return nil }
+    return String(cString: value)
+  }
+
+  func selectSchema(_ id: String) -> Bool {
+    isAlive && glint_rime_select_schema(session, id) == 0 && schemaID == id
+  }
+
+  func option(_ name: String) -> Bool? {
+    let result = glint_rime_get_option(session, name)
+    return result < 0 ? nil : result == 1
+  }
+
+  static func schemaValue(_ schema: String, key: String) -> String? {
+    var value = [CChar](repeating: 0, count: 4096)
+    guard glint_rime_schema_value(schema, key, &value, value.count) == 0 else { return nil }
+    return String(cString: value)
+  }
 
   // MARK: - 输入
 
@@ -116,14 +133,27 @@ final class RimeEngine {
     return value.isEmpty ? nil : value
   }
 
-  /// 预编辑文本。
-  var preedit: String? {
-    guard isAlive else { return nil }
-    var buffer = [CChar](repeating: 0, count: 4096)
-    let written = glint_rime_get_preedit(session, &buffer, buffer.count)
-    guard written > 0 else { return nil }
-    return String(cString: buffer)
+  struct Composition: Equatable {
+    let input: String
+    let text: String
+    let caret: Int
+    let selection: Int
   }
+
+  /// Rime 的光标是 UTF-8 字节位置，AppKit 的选区是 UTF-16 位置。
+  var composition: Composition? {
+    guard isAlive, let input else { return nil }
+    var buffer = [CChar](repeating: 0, count: 4096)
+    var cursor: Int32 = 0
+    let written = glint_rime_get_preedit(session, &buffer, buffer.count, &cursor)
+    guard written > 0 else { return nil }
+    let text = String(cString: buffer)
+    let prefix = String(decoding: text.utf8.prefix(max(0, Int(cursor))), as: UTF8.self)
+    return Composition(input: input, text: text,
+                       caret: Int(glint_rime_caret_pos(session)), selection: prefix.utf16.count)
+  }
+
+  var preedit: String? { composition?.text }
 
   /// 取出**并消费**引擎的提交结果。
   ///

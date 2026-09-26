@@ -2,29 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-	  与参考实现鼠须管的对比（2026-09-25）：
-	    Squirrel: disable-library-validation + network.client + app-sandbox=false
-	              CodeDirectory flags = 0x10000 (runtime，即 Hardened Runtime)
-	    Glint（修正前）: 无任何 entitlement，flags = 0x0
-	  TISRegisterInputSource 返回 noErr 却始终不生效，怀疑与此有关。
-
-	  disable-library-validation **本来就是必需的**：Hardened Runtime 会拒绝
-	  加载不是同一团队签名的 dylib，而打进包里的 librime 与三个插件都是
-	  adhoc 签名（见 scripts/fetch-librime.sh）。此前没暴露，只是因为
-	  压根没开 Hardened Runtime，也就没有这条限制。
-	-->
+	<!-- 0.1.0 保留已做实机输入验收的动态库配置。
+	     打包脚本现在用同一 Apple Development 身份重签 librime 与三个插件；
+	     旧注释称它们是 ad-hoc 签名并以此证明该豁免必需，已不成立。
+	     删除豁免需要另行完成真实输入宿主中的插件加载回归。 -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 
-	<!-- 输入法不能沙盒化：它要读写 ~/Library/Glint，也可能读写 iCloud Drive
-	     普通文件夹（decisions.md 3.2）。参考实现同样显式声明 false。 -->
+	<!-- 输入法需要读写 ~/Library/Glint 与用户允许的 iCloud Drive 普通文件夹。 -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
 
-	<!--
-	  刻意**不加** com.apple.security.network.client：鼠须管加它是为了 Sparkle
-	  自动更新，而本项目首版不引入更新服务（实施计划 §8），不该申请用不到的权限。
-	-->
+	<!-- 非沙盒应用使用 URLSession 按需下载公开输入方案，无需 network.client 沙盒 entitlement。 -->
 </dict>
 </plist>

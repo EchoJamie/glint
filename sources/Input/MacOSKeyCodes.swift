@@ -1,20 +1,7 @@
-//
-//  MacOSKeyCodes.swift
-//  Glint
-//
-//  Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>
-//
-//  This file is part of Glint, licensed under the GNU General Public License
-//  version 3 or later. See LICENSE in the project root.
-//
-//  ---------------------------------------------------------------------------
-//  来源：本文件**复用并修改**自 鼠须管（Squirrel）@
-//  0cd71a6130a5866b0ae6ba0494929ebdc8211194 的 `sources/MacOSKeyCodes.swift`
-//  （GPLv3，Copyright (C) RIME Developers / Leo Liu）。
-//  本项目同为 GPLv3，复用与修改依据 decisions.md 5.2 节登记；
-//  修改内容见文件末尾「与参考实现的差异」。
-//  ---------------------------------------------------------------------------
-//
+// Copyright (C) 2026 EchoJamie <echojamieee@outlook.com>
+// Copyright (C) RIME Developers / Leo Liu
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Adapted from rime/squirrel sources/MacOSKeyCodes.swift @ 0cd71a6130a5866b0ae6ba0494929ebdc8211194.
 
 import AppKit
 import Carbon
@@ -313,7 +300,7 @@ private enum XK {
 }
 
 // ---------------------------------------------------------------------------
-// 与参考实现的差异（decisions.md 5.2 要求记录修改）
+// 与参考实现的差异（来源与许可证见 THIRD_PARTY.md）
 //
 // 1. 类型名 `SquirrelKeycode` → `MacOSKeyCode`；`osxModifiersToRime` →
 //    `rimeModifiers(from:)`；`osxKeycodeToRime` → `rimeKeyCode(keycode:keychar:shift:caps:)`。

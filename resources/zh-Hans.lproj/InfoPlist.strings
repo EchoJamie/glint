@@ -1,5 +1,22 @@
-/* 中文本地化：中文名「流光」，英文名 Glint。
-   见 docs/decisions.md 5.4 节。 */
+/* 中文本地化：中文名「流光」，与 resources/Info.plist 的输入源 ID 一致。
+
+   **必须为每个输入源 ID 单独定义名字**——系统是按「输入源 ID 作为键」
+   到这份文件里查显示名的，`CFBundleName` 只决定 app 名，管不到输入源。
+   漏了的话系统查不到，就拿 ID 原文顶替，表现为：
+     LocalizedName = com.github.echojamie.inputmethod.Glint.Hans
+   进而「系统设置 → 键盘 → 输入法 → 编辑 → +」里根本列不出来。
+   对照实现鼠须管的写法（en.lproj）：
+     "im.rime.inputmethod.Squirrel"      => "Squirrel"
+     "im.rime.inputmethod.Squirrel.Hans" => "Squirrel - Simplified"
+
+   ID 必须与 resources/Info.plist 及 sources/App/GlintIds.swift 一致，
+   `make check-ids` 会核对。 */
 
 CFBundleDisplayName = "流光";
 CFBundleName = "流光";
+
+/* 父项（容器，不可选） */
+"com.github.echojamie.inputmethod.Glint" = "流光";
+
+/* 简体模式（可切换的那一项） */
+"com.github.echojamie.inputmethod.Glint.Hans" = "流光";

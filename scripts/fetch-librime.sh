@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # 引擎版本锁定 1.17.0（D-02）。release tag 与 librime 提交号的对应关系：
-#   1.17.0 -> 33e7814（decisions.md 5.1 记录的参考快照同一提交）
+#   1.17.0 -> 33e7814（固定上游提交）
 RIME_VERSION=1.17.0
 RIME_COMMIT=33e7814
 ARCHIVE="rime-${RIME_COMMIT}-macOS-universal.tar.bz2"
