@@ -161,6 +161,8 @@ final class GlintInputController: IMKInputController {
       flush()
     }
     guard key != 0xffffff, !event.modifierFlags.contains(.command) else { return false }
+    // Rime 在某些方案中会持续吞掉已清空组合后的退格；此时应由宿主删除已上屏文本。
+    if key == 0xff08, engine.input == nil { return false }
     let plain = event.modifierFlags.intersection([.shift, .control, .option, .command]).isEmpty
     if plain, !shownCandidates.isEmpty, let panel = candidatePanel {
       if key == 0xff54, panel.layout == .compact { panel.setLayout(.expanded); showPanel(); return true }
